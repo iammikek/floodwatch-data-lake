@@ -18,6 +18,7 @@
 - Storage: S3/MinIO for raw snapshots and parquet artifacts; Parquet via PyArrow.
 - Orchestration: Dagster (recommended) for backfills, nightly aggregations, embedding refresh.
 - API: FastAPI exposing contracts for measurements, warnings, forecast, and RAG retrieval.
+- OpenAPI: docs/openapi-data-lake.yaml
 - Endpoints:
   - GET /v1/measurements: station_id/from/to/aggregate/bbox → time series + metadata
   - GET /v1/warnings: bbox/region/since → active warnings with geometry and severity

@@ -5,10 +5,10 @@ import httpx
 
 
 class EAClient:
-    def __init__(self, base_url: Optional[str] = None, timeout: float = 10.0, retries: int = 3, backoff: float = 0.5):
+    def __init__(self, base_url: Optional[str] = None, timeout: Optional[float] = None, retries: Optional[int] = None, backoff: float = 0.5):
         self.base_url = base_url or os.getenv("EA_BASE_URL", "https://environment.data.gov.uk/flood-monitoring")
-        self.timeout = timeout
-        self.retries = retries
+        self.timeout = float(timeout or os.getenv("TOTAL_TIMEOUT", "10.0"))
+        self.retries = int(retries or os.getenv("RETRIES", "3"))
         self.backoff = backoff
         self._client = httpx.Client(timeout=self.timeout)
 
@@ -59,4 +59,3 @@ class EAClient:
             params["_sorted"] = ""
         data = self._get(f"/id/measures/{measure_id}/readings", params=params)
         return data.get("items", [])
-

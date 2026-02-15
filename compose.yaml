@@ -12,3 +12,24 @@ services:
       - ./:/app
     command: >
       bash -lc "echo 'lake worker ready (attach and run ingestion scripts)'; sleep infinity"
+  lake-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: floodwatch-lake-api
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    command: >
+      bash -lc "chmod +x scripts/start-api.sh && ./scripts/start-api.sh"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

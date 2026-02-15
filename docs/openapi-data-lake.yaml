@@ -1,0 +1,281 @@
+openapi: 3.0.3
+info:
+  title: Flood Watch Data Lake API
+  version: 0.1.0
+  description: Data Lake endpoints for hydrology, rainfall, warnings, forecasts, and backfill jobs.
+servers:
+  - url: http://localhost:8000
+    description: Local dev
+  - url: https://lake.example.com
+    description: Production
+security:
+  - BearerAuth: []
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Station:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        river_name: { type: string }
+        provider: { type: string }
+    SeriesPoint:
+      type: object
+      properties:
+        t: { type: string, format: date-time }
+        value: { type: number }
+        agg: { type: string, enum: [raw, hour, day] }
+        quality: { type: string }
+    MeasurementsResponse:
+      type: object
+      properties:
+        station: { $ref: '#/components/schemas/Station' }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/SeriesPoint' }
+        window:
+          type: object
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        provenance:
+          type: object
+          properties:
+            as_of: { type: string, format: date-time }
+            source: { type: string }
+    RainfallDaily:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        prcp_mm: { type: number }
+    RainfallResponse:
+      type: object
+      properties:
+        region_id: { type: string }
+        cell_id: { type: string }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/RainfallDaily' }
+        provenance:
+          type: object
+          properties:
+            dataset: { type: string }
+            version: { type: string }
+            as_of: { type: string, format: date-time }
+    Warning:
+      type: object
+      properties:
+        id: { type: string }
+        severity: { type: string }
+        title: { type: string }
+        issued_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        geometry: { type: object }
+        source: { type: string }
+    WarningList:
+      type: array
+      items: { $ref: '#/components/schemas/Warning' }
+    RetrieveContextResponse:
+      type: object
+      properties:
+        signals:
+          type: object
+        snippets:
+          type: array
+          items:
+            type: object
+            properties:
+              source: { type: string }
+              text: { type: string }
+              score: { type: number }
+        window:
+          type: object
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+    ForecastDay:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        summary: { type: string }
+        prcp_mm: { type: number }
+        wind_kph: { type: number }
+    ForecastResponse:
+      type: object
+      properties:
+        region_id: { type: string }
+        days:
+          type: array
+          items: { $ref: '#/components/schemas/ForecastDay' }
+        provenance:
+          type: object
+          properties:
+            source: { type: string }
+            as_of: { type: string, format: date-time }
+    BackfillRequest:
+      type: object
+      required: [dataset, from, to]
+      properties:
+        dataset:
+          type: string
+          enum: [hydrology_readings, haduk_grid_daily, era5_land_hourly, nrfa_daily, incidents]
+        region_id:
+          type: string
+          description: Optional region scope (BRI,SOM,DOR,DEV,CON)
+        series_id:
+          type: string
+          description: Optional series id for per-measure runs
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        slice_size:
+          type: string
+          enum: [hour, day, month]
+    BackfillAccepted:
+      type: object
+      properties:
+        job_id: { type: string }
+        status_url: { type: string }
+paths:
+  /v1/measurements:
+    get:
+      summary: Get measurements for a station or measure
+      parameters:
+        - in: query
+          name: station_id
+          schema: { type: string }
+        - in: query
+          name: measure_id
+          schema: { type: string }
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+        - in: query
+          name: bbox
+          schema: { type: string }
+          description: west,south,east,north
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: aggregate
+          schema: { type: string, enum: [raw, hour, day], default: raw }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeasurementsResponse' }
+  /v1/rainfall:
+    get:
+      summary: Get rainfall daily series for a region or cell
+      parameters:
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+        - in: query
+          name: cell_id
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RainfallResponse' }
+  /v1/warnings:
+    get:
+      summary: Get flood warnings
+      parameters:
+        - in: query
+          name: bbox
+          schema: { type: string }
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    $ref: '#/components/schemas/WarningList'
+  /v1/retrieve-context:
+    get:
+      summary: Retrieve signals and snippets for RAG
+      parameters:
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+        - in: query
+          name: route
+          schema: { type: string }
+        - in: query
+          name: time_window
+          schema: { type: string }
+        - in: query
+          name: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RetrieveContextResponse' }
+  /v1/forecast:
+    get:
+      summary: Get 5‑day forecast for a region
+      parameters:
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ForecastResponse' }
+  /v1/jobs/backfill:
+    post:
+      summary: Start a backfill job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BackfillRequest' }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackfillAccepted' }
