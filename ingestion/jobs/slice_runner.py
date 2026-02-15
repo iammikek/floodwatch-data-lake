@@ -20,8 +20,8 @@ def run_hydrology_month_slice(measure: str, year: int, month: int) -> dict:
     client = EAClient()
     start = datetime(year, month, 1, tzinfo=timezone.utc)
     end = next_month(year, month)
-    since = iso_utc(start)
-    until = iso_utc(end - timedelta(seconds=1))
+    since = start.strftime("%Y-%m-%d")
+    until = (end - timedelta(days=1)).strftime("%Y-%m-%d")
     items = client.get_readings(measure, since=since, until=until, sorted_flag=True)
     out = f"data/raw/ea/readings/{measure}/{year:04d}-{month:02d}.ndjson.gz"
     write_ndjson_gz(out, items)
@@ -51,4 +51,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

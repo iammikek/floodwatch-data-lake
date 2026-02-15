@@ -52,9 +52,9 @@ class EAClient:
     def get_readings(self, measure_id: str, since: Optional[str] = None, until: Optional[str] = None, sorted_flag: bool = True) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {}
         if since:
-            params["since"] = since
+            params["startdate"] = since
         if until:
-            params["until"] = until
+            params["enddate"] = until
         if sorted_flag:
             params["_sorted"] = ""
         data = self._get(f"/id/measures/{measure_id}/readings", params=params)

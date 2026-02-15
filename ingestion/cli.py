@@ -40,8 +40,8 @@ def cmd_fetch_ea_readings_month(args: argparse.Namespace) -> None:
     client = EAClient()
     start = datetime(args.year, args.month, 1, tzinfo=timezone.utc)
     end = next_month(args.year, args.month)
-    since = iso_utc(start)
-    until = iso_utc(end - timedelta(seconds=1))
+    since = start.strftime("%Y-%m-%d")
+    until = (end - timedelta(days=1)).strftime("%Y-%m-%d")
     items: List[Dict[str, Any]] = client.get_readings(args.measure, since=since, until=until, sorted_flag=True)
     out = args.out or f"data/raw/ea/readings/{args.measure}/{args.year:04d}-{args.month:02d}.ndjson.gz"
     write_ndjson_gz(out, items)
@@ -60,8 +60,8 @@ def cmd_fetch_ea_readings_range(args: argparse.Namespace) -> None:
     while True:
         s = datetime(y, m, 1, tzinfo=timezone.utc)
         e = next_month(y, m)
-        since = iso_utc(s)
-        until = iso_utc(e - timedelta(seconds=1))
+        since = s.strftime("%Y-%m-%d")
+        until = (e - timedelta(days=1)).strftime("%Y-%m-%d")
         items: List[Dict[str, Any]] = client.get_readings(args.measure, since=since, until=until, sorted_flag=True)
         out = f"data/raw/ea/readings/{args.measure}/{y:04d}-{m:02d}.ndjson.gz"
         write_ndjson_gz(out, items)
@@ -118,7 +118,7 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
             measure_total += 1
         if args.max_measures and measure_total >= args.max_measures:
             break
-    print(f\"region={args.region} stations_processed={min(station_count, args.max_stations or station_count)} measures_processed={measure_total}\")
+    print(f"region={args.region} stations_processed={min(station_count, args.max_stations or station_count)} measures_processed={measure_total}")
 
 
 def build_parser() -> argparse.ArgumentParser:
