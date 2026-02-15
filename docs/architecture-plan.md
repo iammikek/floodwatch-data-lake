@@ -135,3 +135,57 @@ If you want, I can sketch the two-app monorepo layout and the initial endpoints/
 - clients: shared HTTP clients with retries/timeouts; auth token management.
 - config: environment loading, secrets, rate limit policies.
 - infra: docker-compose for app + workers + Postgres + MinIO + Redis.
+
+## 10‑Year Backfill Plan (Phase 1)
+
+- Scope
+  - Regions: West Country corridor and Somerset Levels priority catchments (Parrett, Tone, Exe, Avon).
+  - Window: Rolling 10 years (today − 10y → present), including current month partials.
+  - Datasets: EA hydrology time‑series (levels/flow), HadUK‑Grid daily precipitation (CEDA), NRFA curated flows (reference), ERA5/Land (bootstrap/gap‑fill).
+
+- Pipeline Outline
+  - Station Discovery: list stations within region and enumerate measures with metadata (units, qualifiers, typical ranges).
+  - Month‑Sliced Ingestion: fetch monthly slices per series with strict timeouts, retries with jitter, and rate limits.
+  - Normalization: write observations with quality flags and provenance; upsert on (series_id, t).
+  - Rainfall Processing: clip HadUK‑Grid NetCDF to region/catchments; compute daily aggregates (mean/max) and per‑cell totals.
+  - Ledger: maintain a backfill ledger for resumability and progress tracking.
+  - Storage: Postgres tables for stations, measures, observations, rainfall_cells, rainfall_daily, rainfall_region_daily.
+
+- Operations
+  - Concurrency control to respect provider limits.
+  - Idempotent writes; safe re‑runs per slice.
+  - Observability: metrics for slice latency, rows ingested, error rates; structured logs and trace ids.
+
+## Acceptance Criteria (Phase 1: 10‑Year Backfill)
+
+- Coverage
+  - Hydrology: ≥ 95% of stations within scope with at least one level or flow series populated over the 10‑year window.
+  - Rainfall: 100% daily coverage for selected HadUK‑Grid cells within region over the 10‑year window or documented gaps with ERA5/Land substitutions.
+
+- Completeness & Quality
+  - No duplicate (series_id, t) keys; primary key constraint enforced.
+  - Missing‑day rate ≤ 1% per series per year, excluding documented outages.
+  - Quality flags preserved from source; out‑of‑range values flagged against typical ranges.
+
+- Performance
+  - Month slice ingest p95 < 5 s per measure under normal conditions; automatic retry with jitter on failures.
+  - End‑to‑end initial backfill finishes within the configured concurrency/rate limits for the scoped region.
+
+- Idempotency & Resilience
+  - Re‑running any month slice yields zero net new rows unless source changed.
+  - Restarting after failure resumes from last successful ledger entry without manual intervention.
+
+- Provenance & Audit
+  - Each row includes source identifier and version tag; ingestion timestamp recorded.
+  - Ledger exposes per‑slice status, counts, duration, and last error (if any).
+
+- Deliverables
+  - Queryable time‑series endpoints for hydrology and rainfall aggregates scoped by region and time.
+  - Station/measure metadata endpoints to support selection in downstream apps.
+  - Documentation for schemas, contracts, and known data caveats.
+
+## Next Steps
+
+- Finalize table schemas and ledger model aligned to the above contracts.
+- Draft ingestion jobs for EA hydrology (levels/flow) and HadUK‑Grid rainfall with region clipping.
+- Add metrics and dashboards for backfill progress and data quality.
