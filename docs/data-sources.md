@@ -52,12 +52,159 @@
 - OS/Boundaries
   - Static; ingest once and version.
 
+## Granularity & Frequency
+
+- Hydrology (EA levels/flow)
+  - Native resolution: typically 15‑min (some 5‑min or hourly depending on station).
+  - Stored: raw series retained; daily aggregates (mean, max, min, p95, exceedances vs typical high); optional hourly rollups.
+
+- Rainfall (HadUK‑Grid via CEDA)
+  - Native resolution: daily per 1 km grid cell.
+  - Stored: daily per‑cell totals and daily region aggregates (mean, max).
+
+- Rainfall (ERA5/Land via Open‑Meteo)
+  - Native resolution: hourly.
+  - Stored: aggregated to daily totals (mm/day) for parity with HadUK‑Grid; keep hourly only if required by analyses.
+
+- Roads/Incidents (National Highways, LAs)
+  - Native: event‑based with timestamps (start, update, end).
+  - Stored: event stream + optional daily aggregates (counts, durations) for analytics.
+
+- Geospatial (OS Open Roads, BoundaryLine, Code‑Point Open)
+  - Native: static datasets (periodic releases).
+  - Stored: latest version in PostGIS; retain historical versions when needed.
+
+## Daily Aggregations (Published Columns)
+
+- Hydrology (observations_daily)
+  - series_id
+  - date
+  - value_mean
+  - value_max
+  - value_min
+  - value_p95
+  - exceedances_typical_high
+  - hours_above_typical_high
+  - sample_count
+  - source_version
+  - ingested_at
+
+- Rainfall Per Cell (rainfall_daily)
+  - cell_id
+  - date
+  - prcp_mm
+  - source_version
+  - ingested_at
+
+- Rainfall Regional Aggregates (rainfall_region_daily)
+  - region_id
+  - date
+  - prcp_mm_mean
+  - prcp_mm_max
+  - prcp_mm_p95
+  - cell_count
+  - source_version
+  - ingested_at
+
+- Incidents (incidents_daily_agg)
+  - region_id
+  - date
+  - incident_count
+  - active_duration_hours_sum
+  - closure_count
+  - source_version
+  - ingested_at
+
+## Derivation Mapping (Raw → Hourly → Daily)
+
+- Hydrology
+  - Raw (observations): direct from EA readings; keep all samples with UTC timestamps and quality.
+  - Hourly (observations_hourly):
+    - Bucket: t_hour = floor(to_hour(t, UTC)).
+    - value_mean/max/min = aggregates over samples in the hour.
+    - sample_count = count of samples in the hour.
+  - Daily (observations_daily):
+    - Bucket: date = UTC calendar day.
+    - value_mean/max/min/p95 = aggregates over day samples (p95 via nearest-rank on sorted values).
+    - exceedances_typical_high = count(samples where value > measures.typical_high).
+    - hours_above_typical_high = sum over hours where any sample > typical_high (or fractional by sample coverage).
+    - sample_count = total samples for the day.
+    - Missing data handling: if coverage < 80% of expected samples, flag day for QA.
+
+- Rainfall
+  - HadUK‑Grid:
+    - Raw: daily per‑cell totals from NetCDF (mm/day).
+    - Region daily: prcp_mm_mean = area‑weighted mean across cells intersecting region; prcp_mm_max and prcp_mm_p95 similarly by cell values.
+  - ERA5/Land:
+    - Raw: hourly precipitation; aggregate to daily per coordinate/cell by sum(mm/hour) → mm/day.
+    - Coverage rule: if < 80% of hours present, mark day as partial.
+
+- Incidents
+  - Raw: event stream with start/end timestamps and updates.
+  - Daily aggregates:
+    - incident_count = number of events active at any time during day.
+    - active_duration_hours_sum = sum of intersection duration between event [start,end] and day window.
+    - closure_count = count of events with closure severity during day.
+
+## Hourly Rollups (Published Columns, Optional)
+
+- Hydrology (observations_hourly)
+  - series_id
+  - t_hour          // UTC hour bucket start
+  - value_mean
+  - value_max
+  - value_min
+  - sample_count
+  - source_version
+  - ingested_at
+
+## Raw Observations Schema (Canonical)
+
+- Hydrology (observations)
+  - series_id       // references measures.id
+  - t               // UTC timestamp
+  - value           // numeric
+  - quality         // source quality flag where provided
+  - source_version  // e.g., API version or dataset release id
+  - ingested_at     // ingestion timestamp
+  - Notes:
+    - Units and parameter are defined by the measure/series metadata (measures.unit, measures.parameter).
+    - Typical ranges (typical_low, typical_high) stored on measures for exceedance calculations.
+
 ## V1 Recommendation (West Country Focus)
 
 - Hydrology: EA stations + latest readings, plus active flood warnings.
 - Roads: National Highways incidents for the SW corridor (M4/M5/A38).
 - Weather: Open‑Meteo forecasts initially; add Met Office DataHub when keys ready.
 - Geospatial: OS Open Roads + BoundaryLine for geometry/region scoping; Code‑Point Open for postcode lookup.
+
+## Regions In Scope (Phase 1)
+
+- Regions
+  - Bristol (Unitary Authority)
+  - Somerset
+  - Dorset
+  - Devon
+  - Cornwall (incl. Isles of Scilly as needed)
+
+- Region IDs (proposed)
+  - BRI, SOM, DOR, DEV, CON
+  - Use these in cache keys, Parquet partitions, and API filters.
+
+- Boundary Source
+  - OS BoundaryLine: use UA/County polygons for exact selection and aggregation.
+  - PostGIS storage with spatial indexes; convert to EPSG:4326 for APIs.
+
+- Approximate BBoxes (discovery only; use polygons for final selection)
+  - Bristol: -2.75, 51.40, -2.45, 51.55
+  - Somerset: -3.90, 50.90, -2.20, 51.40
+  - Dorset: -2.96, 50.50, -1.70, 51.00
+  - Devon: -4.75, 50.20, -2.95, 51.25
+  - Cornwall: -5.80, 49.90, -4.00, 50.80
+
+Notes:
+- Use bboxes to prune upstream discovery requests; snap final station/cell membership to region polygons.
+- Keep region versions in metadata to support boundary updates over time.
 
 ## Caching & Resilience Defaults
 

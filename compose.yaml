@@ -1,0 +1,14 @@
+services:
+  lake-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: floodwatch-lake-worker
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./:/app
+    command: >
+      bash -lc "echo 'lake worker ready (attach and run ingestion scripts)'; sleep infinity"
