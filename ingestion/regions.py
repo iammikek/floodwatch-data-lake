@@ -8,16 +8,16 @@ REGION_BBOX = {
 
 # Approximate search centers and radii (km) for EA 'near' queries
 REGION_NEAR = {
-    # Bristol: M5/M4, Avonmouth, Severn estuary
     "BRI": {"lat": 51.4545, "long": -2.5879, "dist": 40},
-    # Somerset: Somerset Levels, Muchelney cut-off risk, River Parrett, A361
     "SOM": {"lat": 51.03, "long": -2.90, "dist": 60},
-    # Devon: A38, A30, A303, Exeter, Torbay, Plymouth, River Exe/Tamar
     "DEV": {"lat": 50.70, "long": -3.60, "dist": 100},
-    # Cornwall: A30, A38, coastal and river flood risk
     "CON": {"lat": 50.42, "long": -4.90, "dist": 120},
-    # Dorset: fallback for our South West coverage
-    "DOR": {"lat": 50.78, "long": -2.00, "dist": 60},
+    # Dorset: use multiple centres to cover Bournemouth/Poole, Weymouth/Portland, West Dorset
+    "DOR": [
+        {"lat": 50.720, "long": -1.880, "dist": 30},  # Bournemouth/Poole
+        {"lat": 50.609, "long": -2.455, "dist": 35},  # Weymouth/Portland
+        {"lat": 50.736, "long": -2.757, "dist": 35},  # Dorchester/West Dorset
+    ],
 }
 
 # Outward postcode prefixes for scoping and reporting

@@ -51,7 +51,18 @@ def cmd_fetch_ea_stations_region(args: argparse.Namespace) -> None:
     near = REGION_NEAR.get(args.region)
     client = EAClient()
     if near:
-        items = client.get_stations_near(near["lat"], near["long"], near["dist"], parameter=args.parameter)
+        centers = near if isinstance(near, list) else [near]
+        seen = set()
+        items = []
+        for c in centers:
+            chunk = client.get_stations_near(c["lat"], c["long"], c["dist"], parameter=args.parameter)
+            for it in chunk:
+                nid = it.get("notation") or it.get("stationReference") or it.get("@id")
+                if nid and nid in seen:
+                    continue
+                if nid:
+                    seen.add(nid)
+                items.append(it)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out = args.out or f"data/raw/ea/stations/{args.region}_{ts}.ndjson.gz"
         write_ndjson_gz(out, items)
