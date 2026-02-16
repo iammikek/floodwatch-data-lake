@@ -17,3 +17,5 @@ logs-worker:
 restart-api:
 	docker compose restart lake-api
 
+collector:
+	./scripts/run-collector.sh
