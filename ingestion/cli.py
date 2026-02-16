@@ -151,6 +151,10 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
             m for m in measures
             if m.get("parameter") in params and (not excludes or (m.get("qualifier") or "") not in excludes)
         ]
+        if not selected:
+            tidal = [m for m in measures if m.get("parameter") == "level" and (m.get("qualifier") or "") == "Tidal Level"]
+            if tidal:
+                selected = tidal
         for m in selected:
             if args.max_measures and measure_total >= args.max_measures:
                 break
