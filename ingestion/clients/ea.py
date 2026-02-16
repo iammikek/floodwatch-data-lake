@@ -40,6 +40,13 @@ class EAClient:
         data = self._get("/id/stations", params=params)
         return data.get("items", [])
 
+    def get_stations_near(self, lat: float, lon: float, dist_km: int, parameter: Optional[str] = None) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"lat": lat, "long": lon, "dist": dist_km}
+        if parameter:
+            params["parameter"] = parameter
+        data = self._get("/id/stations", params=params)
+        return data.get("items", [])
+
     def get_measures(self, station: Optional[str] = None, parameter: Optional[str] = None) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {}
         if station:

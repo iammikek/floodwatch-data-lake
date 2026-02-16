@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 from ingestion.clients.ea import EAClient
 from ingestion.io import write_ndjson_gz
-from ingestion.regions import REGION_BBOX
+from ingestion.regions import REGION_BBOX, REGION_NEAR
 
 
 def iso_utc(dt: datetime) -> str:
@@ -48,9 +48,18 @@ def cmd_fetch_ea_readings_month(args: argparse.Namespace) -> None:
     print(out)
 
 def cmd_fetch_ea_stations_region(args: argparse.Namespace) -> None:
-    bbox = REGION_BBOX[args.region]
-    ns = argparse.Namespace(bbox=bbox, parameter=args.parameter, out=args.out)
-    cmd_fetch_ea_stations(ns)
+    near = REGION_NEAR.get(args.region)
+    client = EAClient()
+    if near:
+        items = client.get_stations_near(near["lat"], near["long"], near["dist"], parameter=args.parameter)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        out = args.out or f"data/raw/ea/stations/{args.region}_{ts}.ndjson.gz"
+        write_ndjson_gz(out, items)
+        print(out)
+    else:
+        bbox = REGION_BBOX[args.region]
+        ns = argparse.Namespace(bbox=bbox, parameter=args.parameter, out=args.out)
+        cmd_fetch_ea_stations(ns)
 
 def cmd_fetch_ea_readings_range(args: argparse.Namespace) -> None:
     client = EAClient()

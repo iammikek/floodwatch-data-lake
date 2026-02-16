@@ -44,6 +44,15 @@ class EAClientTests(unittest.TestCase):
         self.assertEqual(self.fake.last_params.get("bbox"), "-2,51,-1,52")
         self.assertEqual(self.fake.last_params.get("parameter"), "level")
 
+    def test_get_stations_near_params(self):
+        self.fake.response = _FakeResponse(200, {"items": [{"id": 1}]})
+        items = self.client.get_stations_near(51.1, -2.9, 20, parameter="level")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(self.fake.last_params.get("lat"), 51.1)
+        self.assertEqual(self.fake.last_params.get("long"), -2.9)
+        self.assertEqual(self.fake.last_params.get("dist"), 20)
+        self.assertEqual(self.fake.last_params.get("parameter"), "level")
+
     def test_get_readings_date_params(self):
         self.fake.response = _FakeResponse(200, {"items": [{"v": 1}, {"v": 2}]})
         items = self.client.get_readings(
