@@ -151,8 +151,29 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
             if args.max_measures and measure_total >= args.max_measures:
                 break
             measure_id = _measure_notation(m)
-            rng_args = argparse.Namespace(measure=measure_id, from_month=from_month, to_month=to_month)
-            cmd_fetch_ea_readings_range(rng_args)
+            if getattr(args, "resume", False):
+                sy, sm = map(int, from_month.split("-"))
+                ey, em = map(int, to_month.split("-"))
+                y, mo = sy, sm
+                while True:
+                    out_path = f"data/raw/ea/readings/{measure_id}/{y:04d}-{mo:02d}.ndjson.gz"
+                    if not os.path.exists(out_path):
+                        sdt = datetime(y, mo, 1, tzinfo=timezone.utc)
+                        edt = next_month(y, mo)
+                        since = sdt.strftime("%Y-%m-%d")
+                        until = (edt - timedelta(days=1)).strftime("%Y-%m-%d")
+                        items: List[Dict[str, Any]] = client.get_readings(measure_id, since=since, until=until, sorted_flag=True)
+                        write_ndjson_gz(out_path, items)
+                    if y == ey and mo == em:
+                        break
+                    if mo == 12:
+                        y += 1
+                        mo = 1
+                    else:
+                        mo += 1
+            else:
+                rng_args = argparse.Namespace(measure=measure_id, from_month=from_month, to_month=to_month)
+                cmd_fetch_ea_readings_range(rng_args)
             measure_total += 1
         if args.max_measures and measure_total >= args.max_measures:
             break
@@ -200,6 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
     pbr.add_argument("--to", dest="to_month", help="YYYY-MM; default current month")
     pbr.add_argument("--max-stations", type=int, help="limit stations for trial runs")
     pbr.add_argument("--max-measures", type=int, help="limit measures for trial runs")
+    pbr.add_argument("--resume", action="store_true", help="skip existing monthly files to continue where left off")
     pbr.set_defaults(func=cmd_backfill_ea_region)
 
     return p
