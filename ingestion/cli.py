@@ -107,8 +107,23 @@ def _station_id(s: Dict[str, Any]) -> str:
 
 def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
     client = EAClient()
-    bbox = REGION_BBOX[args.region]
-    stations = client.get_stations(bbox=bbox)
+    near = REGION_NEAR.get(args.region)
+    if near and hasattr(client, "get_stations_near"):
+        centers = near if isinstance(near, list) else [near]
+        seen = set()
+        stations: List[Dict[str, Any]] = []
+        for c in centers:
+            chunk = client.get_stations_near(c["lat"], c["long"], c["dist"])
+            for it in chunk:
+                nid = _station_id(it)
+                if nid and nid in seen:
+                    continue
+                if nid:
+                    seen.add(nid)
+                stations.append(it)
+    else:
+        bbox = REGION_BBOX[args.region]
+        stations = client.get_stations(bbox=bbox)
     params = [p.strip() for p in (args.parameters.split(",") if args.parameters else ["level","flow"])]
     # Default range: last 10 years through current month if not provided
     now = datetime.now(timezone.utc)
@@ -127,7 +142,10 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
         if args.max_stations and station_count > args.max_stations:
             break
         sid = _station_id(s)
-        measures = client.get_measures(station=sid)
+        try:
+            measures = client.get_measures(station=sid)
+        except Exception:
+            continue
         selected = [m for m in measures if m.get("parameter") in params]
         for m in selected:
             if args.max_measures and measure_total >= args.max_measures:

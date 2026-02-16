@@ -49,12 +49,15 @@ class EAClient:
 
     def get_measures(self, station: Optional[str] = None, parameter: Optional[str] = None) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {}
-        if station:
-            params["station"] = station
         if parameter:
             params["parameter"] = parameter
-        data = self._get("/id/measures", params=params)
-        return data.get("items", [])
+        if station:
+            path = f"/id/stations/{station}/measures"
+            data = self._get(path, params=params)
+            return data.get("items", [])
+        else:
+            data = self._get("/id/measures", params=params)
+            return data.get("items", [])
 
     def get_readings(self, measure_id: str, since: Optional[str] = None, until: Optional[str] = None, sorted_flag: bool = True) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {}
