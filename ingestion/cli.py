@@ -125,6 +125,7 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
         bbox = REGION_BBOX[args.region]
         stations = client.get_stations(bbox=bbox)
     params = [p.strip() for p in (args.parameters.split(",") if args.parameters else ["level","flow"])]
+    excludes = [q.strip() for q in (args.exclude_qualifiers.split(",") if getattr(args, "exclude_qualifiers", None) else []) if q.strip()]
     # Default range: last 10 years through current month if not provided
     now = datetime.now(timezone.utc)
     if args.from_month and args.to_month:
@@ -146,7 +147,10 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
             measures = client.get_measures(station=sid)
         except Exception:
             continue
-        selected = [m for m in measures if m.get("parameter") in params]
+        selected = [
+            m for m in measures
+            if m.get("parameter") in params and (not excludes or (m.get("qualifier") or "") not in excludes)
+        ]
         for m in selected:
             if args.max_measures and measure_total >= args.max_measures:
                 break
@@ -221,6 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     pbr.add_argument("--to", dest="to_month", help="YYYY-MM; default current month")
     pbr.add_argument("--max-stations", type=int, help="limit stations for trial runs")
     pbr.add_argument("--max-measures", type=int, help="limit measures for trial runs")
+    pbr.add_argument("--exclude-qualifiers", default="Tidal Level", help="comma-separated measure qualifiers to exclude (e.g. Tidal Level)")
     pbr.add_argument("--resume", action="store_true", help="skip existing monthly files to continue where left off")
     pbr.set_defaults(func=cmd_backfill_ea_region)
 
