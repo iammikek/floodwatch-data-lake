@@ -69,3 +69,17 @@ class EAClient:
             params["_sorted"] = ""
         data = self._get(f"/id/measures/{measure_id}/readings", params=params)
         return data.get("items", [])
+
+    def get_floods(self, min_severity: Optional[int] = None, county: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None, dist_km: Optional[int] = None) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        if min_severity is not None:
+            params["min-severity"] = min_severity
+        if county:
+            params["county"] = county
+        if lat is not None and lon is not None:
+            params["lat"] = lat
+            params["long"] = lon
+        if dist_km is not None:
+            params["dist"] = dist_km
+        data = self._get("/id/floods", params=params)
+        return data.get("items", [])
