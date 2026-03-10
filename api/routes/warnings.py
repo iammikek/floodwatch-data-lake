@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Query, Request, Depends
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from typing import Optional, List, Dict
 from datetime import datetime
 from api.models import Warning
@@ -23,7 +25,11 @@ def get_warnings(
     key = f"warnings:{build_key(bbox, region, since)}:{county or ''}:{min_severity or ''}"
     cached = cache_get(key)
     if cached is not None:
-        return cached
+        cnt = len(cached.get("items") or [])
+        etag = f"W/{hash((key, cnt))}"
+        return JSONResponse(content=jsonable_encoder(cached), headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
     resp = list_warnings(bbox, region, since, ea, min_severity=min_severity, county=county)
     cache_set(key, resp, ttl=30)
-    return resp
+    cnt = len(resp.get("items") or [])
+    etag = f"W/{hash((key, cnt))}"
+    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
