@@ -63,3 +63,10 @@ Data ingestion and API for UK flood monitoring, curated polygons, and time‑ser
 - Data Sources: [docs/data-sources.md](docs/data-sources.md)
 - Project Brief: [docs/project-brief.md](docs/project-brief.md)
 - Agents: [AGENTS.md](AGENTS.md)
+
+## API Examples
+- Warnings (county filter, no region)
+  
+  ```bash
+  curl "http://localhost:8000/v1/warnings?county=Somerset&min_severity=2"
+  ```
