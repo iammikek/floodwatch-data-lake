@@ -1,88 +1,25 @@
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, Query, Request
+from typing import Optional, Dict, Any
 from datetime import datetime, date
-
-
-class Station(BaseModel):
-    id: str
-    name: Optional[str] = None
-    lat: Optional[float] = None
-    lng: Optional[float] = None
-    river_name: Optional[str] = None
-    provider: Optional[str] = None
-
-
-class SeriesPoint(BaseModel):
-    t: datetime
-    value: float
-    agg: str
-    quality: Optional[str] = None
-
-
-class MeasurementsResponse(BaseModel):
-    station: Optional[Station] = None
-    series: List[SeriesPoint]
-    window: Dict[str, datetime]
-    provenance: Dict[str, Any]
-
-
-class RainfallDaily(BaseModel):
-    date: date
-    prcp_mm: float
-
-
-class RainfallResponse(BaseModel):
-    region_id: Optional[str] = None
-    cell_id: Optional[str] = None
-    series: List[RainfallDaily]
-    provenance: Dict[str, Any]
-
-
-class Warning(BaseModel):
-    id: str
-    severity: str
-    title: str
-    issued_at: datetime
-    updated_at: datetime
-    geometry: Optional[Dict[str, Any]] = None
-    source: Optional[str] = None
-
-
-class RetrieveContextResponse(BaseModel):
-    signals: Dict[str, Any]
-    snippets: List[Dict[str, Any]]
-    window: Dict[str, datetime]
-
-
-class ForecastDay(BaseModel):
-    date: date
-    summary: Optional[str] = None
-    prcp_mm: Optional[float] = None
-    wind_kph: Optional[float] = None
-
-
-class ForecastResponse(BaseModel):
-    region_id: str
-    days: List[ForecastDay]
-    provenance: Dict[str, Any]
-
-
-class BackfillRequest(BaseModel):
-    dataset: str
-    region_id: Optional[str] = None
-    series_id: Optional[str] = None
-    from_: datetime
-    to: datetime
-    slice_size: Optional[str] = None
-
-
-class BackfillAccepted(BaseModel):
-    job_id: str
-    status_url: str
+from api.models import (
+    MeasurementsResponse,
+    RainfallResponse,
+    Warning,
+    RetrieveContextResponse,
+    ForecastResponse,
+    BackfillRequest,
+    BackfillAccepted,
+)
+from api.utils.cache import cache_get, cache_set, rate_limit
+from api.routes.measurements import router as measurements_router
+from api.routes.polygons import router as polygons_router
+from api.routes.warnings import router as warnings_router
 
 
 app = FastAPI(title="Flood Watch Data Lake API", version="0.1.0")
+app.include_router(measurements_router)
+app.include_router(polygons_router)
+app.include_router(warnings_router)
 
 @app.get("/healthz")
 def healthz():
@@ -90,26 +27,7 @@ def healthz():
     return {"status": "ok", "version": app.version, "time": now.isoformat() + "Z"}
 
 
-@app.get("/v1/measurements", response_model=MeasurementsResponse)
-def get_measurements(
-    station_id: Optional[str] = None,
-    measure_id: Optional[str] = None,
-    region: Optional[str] = Query(None, pattern="^(BRI|SOM|DOR|DEV|CON)$"),
-    bbox: Optional[str] = None,
-    from_: Optional[datetime] = Query(None, alias="from"),
-    to: Optional[datetime] = None,
-    aggregate: str = "raw",
-    page: int = 1,
-    limit: int = 500,
-):
-    now = datetime.utcnow()
-    resp = MeasurementsResponse(
-        station=Station(id=station_id or "unknown"),
-        series=[],
-        window={"from": from_ or now, "to": to or now},
-        provenance={"as_of": now, "source": "lake"},
-    )
-    return resp
+ 
 
 
 @app.get("/v1/rainfall", response_model=RainfallResponse)
@@ -129,13 +47,7 @@ def get_rainfall(
     return resp
 
 
-@app.get("/v1/warnings", response_model=Dict[str, List[Warning]])
-def get_warnings(
-    bbox: Optional[str] = None,
-    region: Optional[str] = Query(None, pattern="^(BRI|SOM|DOR|DEV|CON)$"),
-    since: Optional[datetime] = None,
-):
-    return {"items": []}
+ 
 
 
 @app.get("/v1/retrieve-context", response_model=RetrieveContextResponse)
@@ -167,3 +79,6 @@ def get_forecast(region: str = Query(..., pattern="^(BRI|SOM|DOR|DEV|CON)$")):
 def post_backfill(req: BackfillRequest):
     job_id = "job-0001"
     return {"job_id": job_id, "status_url": f"/v1/jobs/{job_id}"}
+
+
+ 

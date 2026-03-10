@@ -1,10 +1,22 @@
 import argparse
 import os
+import json
+import gzip
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
-from ingestion.clients.ea import EAClient
-from ingestion.io import write_ndjson_gz
 from ingestion.regions import REGION_BBOX, REGION_NEAR
+try:
+    from ingestion.clients.ea import EAClient  # type: ignore
+except Exception:
+    EAClient = None  # type: ignore
+try:
+    from ingestion.io import write_ndjson_gz  # type: ignore
+except Exception:
+    def write_ndjson_gz(path: str, items: List[Dict[str, Any]]) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with gzip.open(path, "wt") as f:
+            for it in items:
+                f.write(json.dumps(it) + "\n")
 
 
 def iso_utc(dt: datetime) -> str:
@@ -187,6 +199,248 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
             break
     print(f"region={args.region} stations_processed={min(station_count, args.max_stations or station_count)} measures_processed={measure_total}")
 
+def _bbox_points(bbox: str):
+    w, s, e, n = [float(x) for x in bbox.split(",")]
+    cx = (w + e) / 2.0
+    cy = (s + n) / 2.0
+    return [
+        (cy, cx),
+        ((s + cy) / 2.0, (w + cx) / 2.0),
+        ((s + cy) / 2.0, (cx + e) / 2.0),
+        ((cy + n) / 2.0, (w + cx) / 2.0),
+        ((cy + n) / 2.0, (cx + e) / 2.0),
+    ]
+
+def _tile_bbox(bbox: str):
+    w, s, e, n = [float(x) for x in bbox.split(",")]
+    cx = (w + e) / 2.0
+    cy = (s + n) / 2.0
+    return [
+        f"{w},{s},{cx},{cy}",
+        f"{cx},{s},{e},{cy}",
+        f"{w},{cy},{cx},{n}",
+        f"{cx},{cy},{e},{n}",
+    ]
+
+def cmd_fetch_ea_flood_areas_region(args: argparse.Namespace) -> None:
+    import httpx
+    bbox = REGION_BBOX[args.region]
+    pts = _bbox_points(bbox)
+    base = "https://environment.data.gov.uk/flood-monitoring"
+    seen = {}
+    client = httpx.Client(timeout=20)
+    for lat, lon in pts:
+        try:
+            r = client.get(f"{base}/id/floodAreas", params={"lat": lat, "long": lon, "dist": args.dist_km})
+        except Exception:
+            continue
+        if r.status_code != 200:
+            continue
+        items = r.json().get("items") or []
+        if isinstance(items, dict):
+            items = [items]
+        for it in items:
+            key = it.get("notation") or it.get("@id")
+            if not key or key in seen:
+                continue
+            poly = it.get("polygon")
+            href = None
+            if isinstance(poly, dict):
+                href = poly.get("@id") or poly.get("href")
+            elif isinstance(poly, str):
+                href = poly
+            geom = None
+            if href:
+                try:
+                    gj = client.get(href, timeout=20)
+                    if gj.status_code == 200:
+                        geo = gj.json()
+                        if geo.get("type") == "FeatureCollection":
+                            feats = geo.get("features") or []
+                            if feats:
+                                geom = feats[0].get("geometry")
+                        elif geo.get("type") == "Feature":
+                            geom = geo.get("geometry")
+                        elif "coordinates" in geo:
+                            geom = geo
+                except Exception:
+                    pass
+            seen[key] = {
+                "type": "Feature",
+                "properties": {
+                    "id": key,
+                    "label": it.get("label"),
+                    "longName": it.get("longName"),
+                    "riverOrSea": it.get("riverOrSea"),
+                    "eaAreaName": it.get("eaAreaName"),
+                },
+                "geometry": geom,
+            }
+    feats = list(seen.values())
+    out = args.out or f"data/raw/ea/flood_areas/{args.region}.geojson"
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w") as f:
+        json.dump({"type": "FeatureCollection", "features": feats}, f)
+    print(out)
+
+def _ogc_fetch_collection_items(base: str, collection_id: str, bbox: str, limit: int = 100, verbose: bool = False) -> Dict[str, Any]:
+    import httpx
+    url = f"{base}/collections/{collection_id}/items"
+    params = {"bbox": bbox, "limit": limit}
+    client = httpx.Client(timeout=60, headers={"Accept": "application/geo+json, application/json;q=0.9"})
+    all_features: List[Dict[str, Any]] = []
+    next_url = url
+    next_params = params
+    while next_url:
+        if verbose:
+            print(f"requesting collection={collection_id} bbox={bbox} limit={limit} so_far={len(all_features)}")
+        r = client.get(next_url, params=next_params)
+        if r.status_code != 200:
+            break
+        data = r.json()
+        feats = data.get("features") or []
+        if isinstance(feats, dict):
+            feats = [feats]
+        all_features.extend(feats)
+        next_url = None
+        next_params = None
+        for link in data.get("links") or []:
+            if link.get("rel") == "next":
+                next_url = link.get("href")
+                if verbose:
+                    print(f"next page detected for collection={collection_id}")
+                # Some servers provide absolute URL with embedded params; leave params None
+    if verbose:
+        print(f"collected features collection={collection_id} bbox={bbox} total={len(all_features)}")
+    return {"type": "FeatureCollection", "features": all_features}
+
+def cmd_fetch_ea_flood_zones_region(args: argparse.Namespace) -> None:
+    bbox = REGION_BBOX[args.region]
+    base = "https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1"
+    tiles = _tile_bbox(bbox)
+    features = {}
+    for tb in tiles:
+        print(f"tile start bbox={tb}")
+        chunk = _ogc_fetch_collection_items(base, "Flood_Zones_2_3_Rivers_and_Sea", tb, limit=args.page_size, verbose=True)
+        for feat in chunk.get("features", []):
+            key = feat.get("id") or str(hash(json.dumps(feat.get("geometry"), sort_keys=True)))
+            if key not in features:
+                features[key] = feat
+        print(f"tile done bbox={tb} cum_features={len(features)}")
+    out = args.out or f"data/raw/ea/flood_zones/{args.region}_fz2_3.geojson"
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w") as f:
+        json.dump({"type": "FeatureCollection", "features": list(features.values())}, f)
+    print(out)
+
+_RSE_COLLECTIONS = {
+    "defended_1in100_1in200": "Rivers_1in100_Sea_1in200_defended_extents",
+    "undefended_1in100_1in200": "Rivers_1in100_Sea_1in200_undefended_extents",
+    "defended_1in1000": "Rivers_1in1000_Sea_1in1000_defended_extents",
+    "undefended_1in1000": "Rivers_1in1000_Sea_1in1000_undefended_extents",
+}
+
+def cmd_fetch_ea_rivers_sea_extents_region(args: argparse.Namespace) -> None:
+    bbox = REGION_BBOX[args.region]
+    base = "https://environment.data.gov.uk/spatialdata/rivers-and-sea-defended-and-undefended-flood-risk-extents-present-day/ogc/features/v1"
+    to_fetch = []
+    if args.scenario == "all":
+        to_fetch = list(_RSE_COLLECTIONS.items())
+    else:
+        to_fetch = [(args.scenario, _RSE_COLLECTIONS[args.scenario])]
+    tiles = _tile_bbox(bbox)
+    for key, coll in to_fetch:
+        features = {}
+        for tb in tiles:
+            print(f"tile start collection={coll} bbox={tb}")
+            chunk = _ogc_fetch_collection_items(base, coll, tb, limit=args.page_size, verbose=True)
+            for feat in chunk.get("features", []):
+                k = feat.get("id") or str(hash(json.dumps(feat.get("geometry"), sort_keys=True)))
+                if k not in features:
+                    features[k] = feat
+            print(f"tile done collection={coll} bbox={tb} cum_features={len(features)}")
+        out = args.out or f"data/raw/ea/rivers_sea_extents/{args.region}_{key}.geojson"
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "w") as f:
+            json.dump({"type": "FeatureCollection", "features": list(features.values())}, f)
+        print(out)
+
+def _decimate_line(points: List[List[float]], max_points: int) -> List[List[float]]:
+    n = len(points)
+    if n <= max_points:
+        return points
+    step = max(1, n // max_points)
+    out = [points[i] for i in range(0, n, step)]
+    if out[-1] != points[-1]:
+        out.append(points[-1])
+    return out
+
+def _simplify_geometry(geom: Dict[str, Any], tolerance: float) -> Dict[str, Any]:
+    t = geom.get("type")
+    if t == "Polygon":
+        rings = geom.get("coordinates") or []
+        out_rings = []
+        for ring in rings:
+            closed = len(ring) > 1 and ring[0] == ring[-1]
+            core = ring[:-1] if closed else ring
+            simp = _decimate_line(core, max_points=max(200, int(200 / max(1e-9, tolerance / 0.0005))))
+            if closed:
+                if simp[0] != simp[-1]:
+                    simp = simp + [simp[0]]
+            out_rings.append(simp)
+        return {"type": "Polygon", "coordinates": out_rings}
+    if t == "MultiPolygon":
+        polys = geom.get("coordinates") or []
+        out_polys = []
+        for poly in polys:
+            out_rings = []
+            for ring in poly:
+                closed = len(ring) > 1 and ring[0] == ring[-1]
+                core = ring[:-1] if closed else ring
+                simp = _decimate_line(core, max_points=max(200, int(200 / max(1e-9, tolerance / 0.0005))))
+                if closed:
+                    if simp[0] != simp[-1]:
+                        simp = simp + [simp[0]]
+                out_rings.append(simp)
+            out_polys.append(out_rings)
+        return {"type": "MultiPolygon", "coordinates": out_polys}
+    return geom
+
+def cmd_curate_polygons(args: argparse.Namespace) -> None:
+    with open(args.in_path, "r") as f:
+        data = json.load(f)
+    feats = data.get("features") or []
+    seen: Dict[str, Dict[str, Any]] = {}
+    for feat in feats:
+        gid = feat.get("id") or feat.get("properties", {}).get("id")
+        geom = feat.get("geometry")
+        if not geom:
+            continue
+        key = gid or str(hash(json.dumps(geom, sort_keys=True)))
+        if key in seen:
+            continue
+        props = feat.get("properties") or {}
+        props["id"] = gid or props.get("id") or key
+        seen[key] = {"type": "Feature", "properties": props, "geometry": geom}
+    normalized = {"type": "FeatureCollection", "features": list(seen.values())}
+    base = os.path.basename(args.in_path)
+    name, _ = os.path.splitext(base)
+    out_dir = args.out_dir or os.path.join("data", "curated", "ea")
+    os.makedirs(out_dir, exist_ok=True)
+    norm_path = os.path.join(out_dir, f"{name}_normalized.geojson")
+    with open(norm_path, "w") as f:
+        json.dump(normalized, f)
+    simp_feats = []
+    for feat in normalized["features"]:
+        geom = feat.get("geometry")
+        simp = _simplify_geometry(geom, args.tolerance)
+        simp_feats.append({"type": "Feature", "properties": feat.get("properties"), "geometry": simp})
+    simp_path = os.path.join(out_dir, f"{name}_simplified.geojson")
+    with open(simp_path, "w") as f:
+        json.dump({"type": "FeatureCollection", "features": simp_feats}, f)
+    print(norm_path)
+    print(simp_path)
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ingestion")
@@ -232,6 +486,28 @@ def build_parser() -> argparse.ArgumentParser:
     pbr.add_argument("--exclude-qualifiers", default="Tidal Level", help="comma-separated measure qualifiers to exclude (e.g. Tidal Level)")
     pbr.add_argument("--resume", action="store_true", help="skip existing monthly files to continue where left off")
     pbr.set_defaults(func=cmd_backfill_ea_region)
+
+    pfa = sub.add_parser("fetch-ea-flood-areas-region")
+    pfa.add_argument("--region", required=True, choices=list(REGION_BBOX.keys()))
+    pfa.add_argument("--dist-km", type=int, default=60)
+    pfa.add_argument("--out")
+    pfa.set_defaults(func=cmd_fetch_ea_flood_areas_region)
+    pfz = sub.add_parser("fetch-ea-flood-zones-region")
+    pfz.add_argument("--region", required=True, choices=list(REGION_BBOX.keys()))
+    pfz.add_argument("--page-size", type=int, default=100)
+    pfz.add_argument("--out")
+    pfz.set_defaults(func=cmd_fetch_ea_flood_zones_region)
+    prse = sub.add_parser("fetch-ea-rivers-sea-extents-region")
+    prse.add_argument("--region", required=True, choices=list(REGION_BBOX.keys()))
+    prse.add_argument("--scenario", choices=["defended_1in100_1in200","undefended_1in100_1in200","defended_1in1000","undefended_1in1000","all"], default="all")
+    prse.add_argument("--page-size", type=int, default=100)
+    prse.add_argument("--out")
+    prse.set_defaults(func=cmd_fetch_ea_rivers_sea_extents_region)
+    pc = sub.add_parser("curate-polygons")
+    pc.add_argument("--in", dest="in_path", required=True)
+    pc.add_argument("--out-dir")
+    pc.add_argument("--tolerance", type=float, default=0.0005)
+    pc.set_defaults(func=cmd_curate_polygons)
 
     return p
 
