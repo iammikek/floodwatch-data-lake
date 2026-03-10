@@ -73,7 +73,13 @@ components:
       type: object
       properties:
         id: { type: string }
-        severity: { type: string }
+        severity:
+          type: string
+          enum:
+            - Severe Flood Warning
+            - Flood Warning
+            - Flood Alert
+            - No Longer In Force
         title: { type: string }
         issued_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -209,7 +215,8 @@ paths:
               schema: { $ref: '#/components/schemas/RainfallResponse' }
   /v1/warnings:
     get:
-      summary: Get flood warnings
+      summary: Get flood warnings (normalized from EA)
+      description: Returns active warnings (min severity Flood Alert and above) normalized to a stable schema. Scoped by region via near centers; optionally filter by bbox.
       parameters:
         - in: query
           name: bbox
@@ -279,3 +286,88 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BackfillAccepted' }
+  /v1/polygons:
+    get:
+      summary: Get curated polygons metadata or inline FeatureCollection
+      parameters:
+        - in: query
+          name: dataset
+          schema: { type: string, enum: [flood_zones, rse] }
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+        - in: query
+          name: scenario
+          schema:
+            type: string
+            enum: [defended_1in100_1in200, undefended_1in100_1in200, defended_1in1000, undefended_1in1000]
+          description: Required for rse dataset
+        - in: query
+          name: format
+          schema: { type: string, enum: [simplified, normalized], default: simplified }
+        - in: query
+          name: inline
+          schema: { type: boolean, default: false }
+          description: If true, returns FeatureCollection for small bbox
+        - in: query
+          name: bbox
+          schema: { type: string }
+          description: Required when inline=true; west,south,east,north
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  region_id: { type: string }
+                  dataset: { type: string }
+                  scenario: { type: string }
+                  format: { type: string }
+                  path: { type: string }
+                  count: { type: integer }
+                  data:
+                    type: object
+                    description: Optional GeoJSON FeatureCollection when inline=true
+  /v1/polygons/tiles/{dataset}/{z}/{x}/{y}:
+    get:
+      summary: Get polygons as a tile FeatureCollection for a Web Mercator tile
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema: { type: string, enum: [flood_zones, rse] }
+        - in: path
+          name: z
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 22 }
+        - in: path
+          name: x
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - in: path
+          name: y
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: region
+          schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+          required: true
+        - in: query
+          name: scenario
+          schema:
+            type: string
+            enum: [defended_1in100_1in200, undefended_1in100_1in200, defended_1in1000, undefended_1in1000]
+          description: Required for rse dataset
+        - in: query
+          name: format
+          schema: { type: string, enum: [simplified, normalized], default: simplified }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                description: GeoJSON FeatureCollection

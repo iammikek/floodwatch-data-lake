@@ -40,14 +40,24 @@ class EAClient:
         data = self._get("/id/stations", params=params)
         return data.get("items", [])
 
-    def get_measures(self, station: Optional[str] = None, parameter: Optional[str] = None) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {}
-        if station:
-            params["station"] = station
+    def get_stations_near(self, lat: float, lon: float, dist_km: int, parameter: Optional[str] = None) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"lat": lat, "long": lon, "dist": dist_km}
         if parameter:
             params["parameter"] = parameter
-        data = self._get("/id/measures", params=params)
+        data = self._get("/id/stations", params=params)
         return data.get("items", [])
+
+    def get_measures(self, station: Optional[str] = None, parameter: Optional[str] = None) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        if parameter:
+            params["parameter"] = parameter
+        if station:
+            path = f"/id/stations/{station}/measures"
+            data = self._get(path, params=params)
+            return data.get("items", [])
+        else:
+            data = self._get("/id/measures", params=params)
+            return data.get("items", [])
 
     def get_readings(self, measure_id: str, since: Optional[str] = None, until: Optional[str] = None, sorted_flag: bool = True) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {}
@@ -58,4 +68,18 @@ class EAClient:
         if sorted_flag:
             params["_sorted"] = ""
         data = self._get(f"/id/measures/{measure_id}/readings", params=params)
+        return data.get("items", [])
+
+    def get_floods(self, min_severity: Optional[int] = None, county: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None, dist_km: Optional[int] = None) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        if min_severity is not None:
+            params["min-severity"] = min_severity
+        if county:
+            params["county"] = county
+        if lat is not None and lon is not None:
+            params["lat"] = lat
+            params["long"] = lon
+        if dist_km is not None:
+            params["dist"] = dist_km
+        data = self._get("/id/floods", params=params)
         return data.get("items", [])
