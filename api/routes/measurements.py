@@ -4,7 +4,8 @@ from fastapi.encoders import jsonable_encoder
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 from api.models import MeasurementsResponse, Station, SeriesPoint
-from api.services.measurements import month_iter, read_ndjson_gz, series_points, aggregate_points
+from api.services.measurements import month_iter, read_ndjson_gz, series_points, aggregate_points, load_latest_stations, load_latest_measures_map
+from api.services.polygons import parse_bbox
 from api.deps import rate_limiter, measurements_ttl
 import os
 
@@ -28,6 +29,38 @@ def get_measurements(
     f = from_ or (now - timedelta(days=1))
     t = to or now
     series: List[SeriesPoint] = []
+    st_lat = None
+    st_lng = None
+    if bbox:
+        try:
+            w, s, e, n = parse_bbox(bbox)
+            stations = load_latest_stations()
+            target_station = station_id
+            if not target_station and measure_id:
+                m = load_latest_measures_map()
+                target_station = m.get(measure_id)
+            if target_station:
+                coords = stations.get(target_station)
+                if coords:
+                    st_lat = coords.get("lat")
+                    st_lng = coords.get("lng")
+                    if st_lat is not None and st_lng is not None:
+                        inside = (w <= st_lng <= e) and (s <= st_lat <= n)
+                        if not inside:
+                            resp = MeasurementsResponse(
+                                station=Station(id=target_station, lat=st_lat, lng=st_lng),
+                                series=[],
+                                window={"from": f, "to": t},
+                                provenance={"as_of": now, "source": "lake"},
+                            )
+                            cnt = 0
+                            key = f"measurements:{measure_id or target_station}:{aggregate}:{f.isoformat()}:{t.isoformat()}:{page}:{limit}:{bbox}"
+                            etag = f"W/{hash((key, cnt))}"
+                            ttl = measurements_ttl()
+                            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+                            return JSONResponse(content=jsonable_encoder(resp), headers=headers)
+        except Exception:
+            pass
     if measure_id:
         months = month_iter(f, t)
         for y, m in months:
@@ -45,7 +78,7 @@ def get_measurements(
     end = start + limit
     series = series[start:end]
     resp = MeasurementsResponse(
-        station=Station(id=station_id or "unknown"),
+        station=Station(id=(station_id or "unknown"), lat=st_lat, lng=st_lng),
         series=series,
         window={"from": f, "to": t},
         provenance={"as_of": now, "source": "lake"},

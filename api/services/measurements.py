@@ -1,9 +1,13 @@
 import os
 import gzip
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 from datetime import datetime, timezone, timedelta
 from api.models import SeriesPoint
+import glob
+import gzip
+import os
+import json
 
 
 def month_iter(start: datetime, end: datetime) -> List[Tuple[int, int]]:
@@ -71,4 +75,46 @@ def aggregate_points(pts: List[SeriesPoint], mode: str) -> List[SeriesPoint]:
             t = datetime.fromisoformat(k + "T00:00:00+00:00")
         out.append(SeriesPoint(t=t, value=sum(vs) / len(vs), agg=mode))
     out.sort(key=lambda p: p.t)
+    return out
+
+def _latest_file(dirpath: str, pattern: str = "*.ndjson.gz") -> Optional[str]:
+    paths = glob.glob(os.path.join(dirpath, pattern))
+    if not paths:
+        return None
+    paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return paths[0]
+
+def load_latest_stations() -> Dict[str, Dict[str, float]]:
+    dirpath = os.path.join("data", "raw", "ea", "stations")
+    latest = _latest_file(dirpath)
+    out: Dict[str, Dict[str, float]] = {}
+    if not latest:
+        return out
+    items = read_ndjson_gz(latest)
+    for it in items:
+        sid = it.get("notation") or it.get("stationReference") or it.get("@id")
+        lat = it.get("lat") or it.get("latitude")
+        lng = it.get("long") or it.get("longitude") or it.get("lng")
+        if sid and lat is not None and lng is not None:
+            try:
+                out[str(sid)] = {"lat": float(lat), "lng": float(lng)}
+            except Exception:
+                continue
+    return out
+
+def load_latest_measures_map() -> Dict[str, str]:
+    dirpath = os.path.join("data", "raw", "ea", "measures")
+    latest = _latest_file(dirpath)
+    out: Dict[str, str] = {}
+    if not latest:
+        return out
+    items = read_ndjson_gz(latest)
+    for it in items:
+        mid = it.get("notation") or it.get("@id")
+        # station may be nested or a direct field; accept common keys
+        station = it.get("station") or it.get("stationReference") or it.get("station_id")
+        if isinstance(station, dict):
+            station = station.get("notation") or station.get("@id")
+        if mid and station:
+            out[str(mid)] = str(station)
     return out
