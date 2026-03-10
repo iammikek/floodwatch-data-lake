@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict
 from api.models import MeasurementsResponse, Station, SeriesPoint
 from api.services.measurements import month_iter, read_ndjson_gz, series_points, aggregate_points
 from api.deps import rate_limiter, measurements_ttl
@@ -22,8 +22,8 @@ def get_measurements(
     aggregate: str = "raw",
     page: int = 1,
     limit: int = 500,
+    rl: Dict[str, int] = Depends(rate_limiter),
 ):
-    Depends(rate_limiter)
     now = datetime.now(timezone.utc)
     f = from_ or (now - timedelta(days=1))
     t = to or now
@@ -54,4 +54,5 @@ def get_measurements(
     key = f"measurements:{measure_id or station_id}:{aggregate}:{f.isoformat()}:{t.isoformat()}:{page}:{limit}"
     etag = f"W/{hash((key, cnt))}"
     ttl = measurements_ttl()
-    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
+    headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+    return JSONResponse(content=jsonable_encoder(resp), headers=headers)

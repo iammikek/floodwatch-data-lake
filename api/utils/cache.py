@@ -20,7 +20,7 @@ def cache_get(k: str) -> Optional[Any]:
 def cache_set(k: str, v: Any, ttl: int = 30) -> None:
     _cache[k] = (time.time() + ttl, v)
 
-def rate_limit(req: Request, limit: Optional[int] = None, window_s: Optional[int] = None) -> None:
+def rate_limit(req: Request, limit: Optional[int] = None, window_s: Optional[int] = None) -> Dict[str, int]:
     lim = limit or _rl_limit
     win = window_s or _rl_window_s
     ip = req.client.host if req.client else "unknown"
@@ -31,6 +31,12 @@ def rate_limit(req: Request, limit: Optional[int] = None, window_s: Optional[int
         raise HTTPException(status_code=429, detail="rate limit exceeded")
     q.append(now)
     _rl[ip] = q
+    remaining = max(lim - len(q), 0)
+    reset = 0
+    if q:
+        oldest = min(q)
+        reset = max(int(win - (now - oldest)), 0)
+    return {"limit": lim, "remaining": remaining, "reset": reset}
 
 def set_rate_limit_config(limit: int, window_s: int) -> None:
     global _rl_limit, _rl_window_s

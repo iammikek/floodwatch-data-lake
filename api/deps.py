@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from fastapi import Depends, Request
 from ingestion.clients.ea import EAClient
 from api.utils.cache import rate_limit
@@ -16,8 +16,12 @@ def get_ea_client() -> EAClient:
     )
 
 
-def rate_limiter(req: Request) -> None:
-    rate_limit(req)
+def rate_limiter(req: Request) -> Dict[str, int]:
+    lim = os.getenv("RL_LIMIT")
+    win = os.getenv("RL_WINDOW_S")
+    limit = int(lim) if lim else None
+    window_s = int(win) if win else None
+    return rate_limit(req, limit=limit, window_s=window_s)
 
 def _get_ttl(env_name: str, default: int = 30) -> int:
     val = os.getenv(env_name)

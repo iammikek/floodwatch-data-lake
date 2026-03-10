@@ -18,7 +18,7 @@ def get_warnings(
     region: Optional[str] = Query(None, pattern="^(BRI|SOM|DOR|DEV|CON)$"),
     since: Optional[datetime] = None,
     county: Optional[str] = None,
-    _: None = Depends(rate_limiter),
+    rl: Dict[str, int] = Depends(rate_limiter),
     ea: EAClient = Depends(get_ea_client),
     min_severity: Optional[int] = Query(3, ge=1, le=4),
 ):
@@ -28,10 +28,12 @@ def get_warnings(
         cnt = len(cached.get("items") or [])
         etag = f"W/{hash((key, cnt))}"
         ttl = warnings_ttl()
-        return JSONResponse(content=jsonable_encoder(cached), headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
+        headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+        return JSONResponse(content=jsonable_encoder(cached), headers=headers)
     resp = list_warnings(bbox, region, since, ea, min_severity=min_severity, county=county)
     ttl = warnings_ttl()
     cache_set(key, resp, ttl=ttl)
     cnt = len(resp.get("items") or [])
     etag = f"W/{hash((key, cnt))}"
-    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
+    headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+    return JSONResponse(content=jsonable_encoder(resp), headers=headers)
