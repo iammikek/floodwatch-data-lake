@@ -73,7 +73,13 @@ components:
       type: object
       properties:
         id: { type: string }
-        severity: { type: string }
+        severity:
+          type: string
+          enum:
+            - Severe Flood Warning
+            - Flood Warning
+            - Flood Alert
+            - No Longer In Force
         title: { type: string }
         issued_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -209,7 +215,8 @@ paths:
               schema: { $ref: '#/components/schemas/RainfallResponse' }
   /v1/warnings:
     get:
-      summary: Get flood warnings
+      summary: Get flood warnings (normalized from EA)
+      description: Returns active warnings (min severity Flood Alert and above) normalized to a stable schema. Scoped by region via near centers; optionally filter by bbox.
       parameters:
         - in: query
           name: bbox
