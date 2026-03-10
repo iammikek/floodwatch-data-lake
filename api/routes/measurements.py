@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from api.models import MeasurementsResponse, Station, SeriesPoint
 from api.services.measurements import month_iter, read_ndjson_gz, series_points, aggregate_points
-from api.utils.cache import rate_limit
+from api.deps import rate_limiter
 import os
 
 router = APIRouter()
@@ -21,7 +21,7 @@ def get_measurements(
     page: int = 1,
     limit: int = 500,
 ):
-    rate_limit(request)
+    Depends(rate_limiter)
     now = datetime.now(timezone.utc)
     f = from_ or (now - timedelta(days=1))
     t = to or now

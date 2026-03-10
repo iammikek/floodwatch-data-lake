@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Query, HTTPException, Request
+from fastapi import APIRouter, Query, HTTPException, Request, Depends
 from typing import Optional, Dict, Any, List
 import os
 import json
 from api.models import PolygonsResponse
 from api.services.polygons import curated_polygons_path, parse_bbox, bbox_small, geom_bbox, bbox_intersects, tile_bbox
-from api.utils.cache import cache_get, cache_set, rate_limit
+from api.utils.cache import cache_get, cache_set
+from api.deps import rate_limiter
 
 router = APIRouter()
 
@@ -18,7 +19,7 @@ def get_polygons(
     inline: bool = False,
     bbox: Optional[str] = None,
 ):
-    rate_limit(request)
+    Depends(rate_limiter)
     path = curated_polygons_path(dataset, region, scenario, format_)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="curated polygons not found")
@@ -78,7 +79,7 @@ def get_polygon_tile(
     scenario: Optional[str] = Query(None, pattern="^(defended_1in100_1in200|undefended_1in100_1in200|defended_1in1000|undefended_1in1000)$"),
     format_: str = Query("simplified", alias="format", pattern="^(simplified|normalized)$"),
 ):
-    rate_limit(request)
+    Depends(rate_limiter)
     path = curated_polygons_path(dataset, region, scenario, format_)
     bbox = tile_bbox(z, x, y)
     key = f"poly:tile:{dataset}:{region}:{scenario}:{format_}:{z}:{x}:{y}"
