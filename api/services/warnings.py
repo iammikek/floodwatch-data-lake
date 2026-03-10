@@ -69,7 +69,7 @@ def _load_flood_areas(region: str) -> Dict[str, Any]:
     return _areas_cache[region]
 
 
-def list_warnings(bbox: Optional[str], region: Optional[str], since: Optional[datetime], ea: Optional[EAClient] = None, min_severity: Optional[int] = 3) -> Dict[str, List[Warning]]:
+def list_warnings(bbox: Optional[str], region: Optional[str], since: Optional[datetime], ea: Optional[EAClient] = None, min_severity: Optional[int] = 3, county: Optional[str] = None) -> Dict[str, List[Warning]]:
     client = ea or EAClient()
     items: List[Dict[str, Any]] = []
     centers = None
@@ -88,7 +88,7 @@ def list_warnings(bbox: Optional[str], region: Optional[str], since: Optional[da
                     seen.add(k)
                 items.append(it)
     else:
-        items = client.get_floods(min_severity=min_severity)
+        items = client.get_floods(min_severity=min_severity, county=county)
     warnings = [_to_warning(it) for it in items]
     if region:
         areas = _load_flood_areas(region)
