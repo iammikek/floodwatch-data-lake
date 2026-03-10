@@ -6,7 +6,7 @@ import json
 from api.models import PolygonsResponse
 from api.services.polygons import curated_polygons_path, parse_bbox, bbox_small, geom_bbox, bbox_intersects, tile_bbox
 from api.utils.cache import cache_get, cache_set
-from api.deps import rate_limiter
+from api.deps import rate_limiter, polygons_ttl
 
 router = APIRouter()
 
@@ -19,8 +19,8 @@ def get_polygons(
     format_: str = Query("simplified", alias="format", pattern="^(simplified|normalized)$"),
     inline: bool = False,
     bbox: Optional[str] = None,
+    rl: Dict[str, int] = Depends(rate_limiter),
 ):
-    Depends(rate_limiter)
     path = curated_polygons_path(dataset, region, scenario, format_)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="curated polygons not found")
@@ -51,7 +51,9 @@ def get_polygons(
             result["data"] = cached["data"]
             result["count"] = cached["count"]
             etag = f"W/{hash((path, bbox, result['count']))}"
-            return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+            ttl = polygons_ttl()
+            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+            return JSONResponse(content=result, headers=headers)
         try:
             with open(path, "r") as f:
                 doc = json.load(f)
@@ -65,14 +67,18 @@ def get_polygons(
             payload = {"type": "FeatureCollection", "features": filtered}
             result["data"] = payload
             result["count"] = len(filtered)
-            cache_set(key, {"data": payload, "count": len(filtered)}, ttl=30)
+            ttl = polygons_ttl()
+            cache_set(key, {"data": payload, "count": len(filtered)}, ttl=ttl)
             etag = f"W/{hash((path, bbox, len(filtered)))}"
-            return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+            return JSONResponse(content=result, headers=headers)
         except Exception:
             raise HTTPException(status_code=500, detail="failed to build inline response")
     # metadata-only response
     etag = f"W/{hash((path, result['count']))}"
-    return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+    ttl = polygons_ttl()
+    headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+    return JSONResponse(content=result, headers=headers)
 
 @router.get("/v1/polygons/tiles/{dataset}/{z}/{x}/{y}")
 def get_polygon_tile(
@@ -84,14 +90,17 @@ def get_polygon_tile(
     region: str = Query(..., pattern="^(BRI|SOM|DOR|DEV|CON)$"),
     scenario: Optional[str] = Query(None, pattern="^(defended_1in100_1in200|undefended_1in100_1in200|defended_1in1000|undefended_1in1000)$"),
     format_: str = Query("simplified", alias="format", pattern="^(simplified|normalized)$"),
+    rl: Dict[str, int] = Depends(rate_limiter),
 ):
-    Depends(rate_limiter)
     path = curated_polygons_path(dataset, region, scenario, format_)
     bbox = tile_bbox(z, x, y)
     key = f"poly:tile:{dataset}:{region}:{scenario}:{format_}:{z}:{x}:{y}"
     cached = cache_get(key)
     if cached is not None:
-        return cached
+        ttl = polygons_ttl()
+        etag = f"W/{hash((path, z, x, y, len((cached.get('features') or []))) )}"
+        headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+        return JSONResponse(content=cached, headers=headers)
     try:
         feats = []
         if os.path.exists(path):
@@ -104,8 +113,10 @@ def get_polygon_tile(
             if gb and bbox_intersects(gb, bbox):
                 filtered.append(feat)
         payload = {"type": "FeatureCollection", "features": filtered}
-        cache_set(key, payload, ttl=30)
+        ttl = polygons_ttl()
+        cache_set(key, payload, ttl=ttl)
         etag = f"W/{hash((path, z, x, y, len(filtered)))}"
-        return JSONResponse(content=payload, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+        headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+        return JSONResponse(content=payload, headers=headers)
     except Exception:
         raise HTTPException(status_code=500, detail="failed to build tile")
