@@ -97,7 +97,10 @@ def get_polygon_tile(
     key = f"poly:tile:{dataset}:{region}:{scenario}:{format_}:{z}:{x}:{y}"
     cached = cache_get(key)
     if cached is not None:
-        return cached
+        ttl = polygons_ttl()
+        etag = f"W/{hash((path, z, x, y, len((cached.get('features') or []))) )}"
+        headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+        return JSONResponse(content=cached, headers=headers)
     try:
         feats = []
         if os.path.exists(path):
