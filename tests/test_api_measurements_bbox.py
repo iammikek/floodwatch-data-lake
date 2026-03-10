@@ -15,7 +15,7 @@ class ApiMeasurementsBboxTests(unittest.TestCase):
         self.stations_path = os.path.join("data", "raw", "ea", "stations", "stations_test.ndjson.gz")
         self.measures_path = os.path.join("data", "raw", "ea", "measures", "measures_test.ndjson.gz")
         with gzip.open(self.stations_path, "wt") as f:
-            f.write(json.dumps({"notation": "S1", "lat": 51.00, "long": -2.90}) + "\n")
+            f.write(json.dumps({"notation": "S1", "label": "Station S1", "lat": 51.00, "long": -2.90}) + "\n")
         with gzip.open(self.measures_path, "wt") as f:
             f.write(json.dumps({"notation": "M1", "station": "S1"}) + "\n")
         # create readings for measure M1
@@ -54,7 +54,8 @@ class ApiMeasurementsBboxTests(unittest.TestCase):
         series = body.get("series") or []
         self.assertGreaterEqual(len(series), 2)
         st = body.get("station") or {}
-        self.assertEqual(st.get("id"), "unknown")  # station_id not provided in request
+        self.assertEqual(st.get("id"), "unknown")
+        self.assertEqual(st.get("name"), "Station S1")
         self.assertIsNotNone(st.get("lat"))
         self.assertIsNotNone(st.get("lng"))
 
@@ -70,5 +71,6 @@ class ApiMeasurementsBboxTests(unittest.TestCase):
         series = body.get("series") or []
         self.assertEqual(len(series), 0)
         st = body.get("station") or {}
+        self.assertEqual(st.get("name"), "Station S1")
         self.assertIsNotNone(st.get("lat"))
         self.assertIsNotNone(st.get("lng"))

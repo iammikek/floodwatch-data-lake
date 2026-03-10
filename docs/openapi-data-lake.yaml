@@ -169,7 +169,7 @@ paths:
         - in: query
           name: bbox
           schema: { type: string }
-          description: west,south,east,north
+          description: west,south,east,north. When provided, station is resolved via discovery data; returns empty series if station lies outside bbox. Station lat/lng/name may be populated.
         - in: query
           name: from
           schema: { type: string, format: date-time }
@@ -211,7 +211,7 @@ paths:
                 raw:
                   summary: Raw observations
                   value:
-                    station: { id: "ST01", name: "River Avon Station" }
+                    station: { id: "ST01", name: "River Avon Station", lat: 51.45, lng: -2.59 }
                     series:
                       - { t: "2026-03-10T00:00:00Z", value: 1.21, agg: "raw" }
                       - { t: "2026-03-10T00:15:00Z", value: 1.24, agg: "raw" }
@@ -225,7 +225,7 @@ paths:
                 hour:
                   summary: Hourly aggregates
                   value:
-                    station: { id: "ST01", name: "River Avon Station" }
+                    station: { id: "ST01", name: "River Avon Station", lat: 51.45, lng: -2.59 }
                     series:
                       - { t: "2026-03-10T00:00:00Z", value: 1.24, agg: "hour" }
                       - { t: "2026-03-10T01:00:00Z", value: 1.31, agg: "hour" }

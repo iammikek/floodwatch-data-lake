@@ -95,9 +95,14 @@ def load_latest_stations() -> Dict[str, Dict[str, float]]:
         sid = it.get("notation") or it.get("stationReference") or it.get("@id")
         lat = it.get("lat") or it.get("latitude")
         lng = it.get("long") or it.get("longitude") or it.get("lng")
+        name = it.get("label") or it.get("name")
         if sid and lat is not None and lng is not None:
             try:
-                out[str(sid)] = {"lat": float(lat), "lng": float(lng)}
+                row: Dict[str, float] = {"lat": float(lat), "lng": float(lng)}
+                if name:
+                    # store name alongside coords; keep typing simple
+                    row["name"] = name  # type: ignore[assignment]
+                out[str(sid)] = row
             except Exception:
                 continue
     return out

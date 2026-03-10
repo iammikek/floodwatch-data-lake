@@ -31,6 +31,7 @@ def get_measurements(
     series: List[SeriesPoint] = []
     st_lat = None
     st_lng = None
+    st_name = None
     if bbox:
         try:
             w, s, e, n = parse_bbox(bbox)
@@ -42,13 +43,15 @@ def get_measurements(
             if target_station:
                 coords = stations.get(target_station)
                 if coords:
-                    st_lat = coords.get("lat")
-                    st_lng = coords.get("lng")
+                    st_lat = coords.get("lat")  # type: ignore[assignment]
+                    st_lng = coords.get("lng")  # type: ignore[assignment]
+                    nm = coords.get("name")  # type: ignore[assignment]
+                    st_name = nm if isinstance(nm, str) else None
                     if st_lat is not None and st_lng is not None:
                         inside = (w <= st_lng <= e) and (s <= st_lat <= n)
                         if not inside:
                             resp = MeasurementsResponse(
-                                station=Station(id=target_station, lat=st_lat, lng=st_lng),
+                                station=Station(id=target_station, name=st_name, lat=st_lat, lng=st_lng),
                                 series=[],
                                 window={"from": f, "to": t},
                                 provenance={"as_of": now, "source": "lake"},
@@ -78,7 +81,7 @@ def get_measurements(
     end = start + limit
     series = series[start:end]
     resp = MeasurementsResponse(
-        station=Station(id=(station_id or "unknown"), lat=st_lat, lng=st_lng),
+        station=Station(id=(station_id or "unknown"), name=st_name, lat=st_lat, lng=st_lng),
         series=series,
         window={"from": f, "to": t},
         provenance={"as_of": now, "source": "lake"},
