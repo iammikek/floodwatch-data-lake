@@ -6,7 +6,7 @@ from datetime import datetime
 from api.models import Warning
 from api.utils.cache import cache_get, cache_set, rate_limit
 from api.services.warnings import list_warnings, build_key
-from api.deps import get_ea_client, rate_limiter
+from api.deps import get_ea_client, rate_limiter, warnings_ttl
 from ingestion.clients.ea import EAClient
 
 router = APIRouter()
@@ -27,9 +27,11 @@ def get_warnings(
     if cached is not None:
         cnt = len(cached.get("items") or [])
         etag = f"W/{hash((key, cnt))}"
-        return JSONResponse(content=jsonable_encoder(cached), headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+        ttl = warnings_ttl()
+        return JSONResponse(content=jsonable_encoder(cached), headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
     resp = list_warnings(bbox, region, since, ea, min_severity=min_severity, county=county)
-    cache_set(key, resp, ttl=30)
+    ttl = warnings_ttl()
+    cache_set(key, resp, ttl=ttl)
     cnt = len(resp.get("items") or [])
     etag = f"W/{hash((key, cnt))}"
-    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})

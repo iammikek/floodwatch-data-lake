@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from api.models import MeasurementsResponse, Station, SeriesPoint
 from api.services.measurements import month_iter, read_ndjson_gz, series_points, aggregate_points
-from api.deps import rate_limiter
+from api.deps import rate_limiter, measurements_ttl
 import os
 
 router = APIRouter()
@@ -53,4 +53,5 @@ def get_measurements(
     cnt = len(series)
     key = f"measurements:{measure_id or station_id}:{aggregate}:{f.isoformat()}:{t.isoformat()}:{page}:{limit}"
     etag = f"W/{hash((key, cnt))}"
-    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+    ttl = measurements_ttl()
+    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})

@@ -6,7 +6,7 @@ import json
 from api.models import PolygonsResponse
 from api.services.polygons import curated_polygons_path, parse_bbox, bbox_small, geom_bbox, bbox_intersects, tile_bbox
 from api.utils.cache import cache_get, cache_set
-from api.deps import rate_limiter
+from api.deps import rate_limiter, polygons_ttl
 
 router = APIRouter()
 
@@ -51,7 +51,8 @@ def get_polygons(
             result["data"] = cached["data"]
             result["count"] = cached["count"]
             etag = f"W/{hash((path, bbox, result['count']))}"
-            return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+            ttl = polygons_ttl()
+            return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
         try:
             with open(path, "r") as f:
                 doc = json.load(f)
@@ -65,14 +66,16 @@ def get_polygons(
             payload = {"type": "FeatureCollection", "features": filtered}
             result["data"] = payload
             result["count"] = len(filtered)
-            cache_set(key, {"data": payload, "count": len(filtered)}, ttl=30)
+            ttl = polygons_ttl()
+            cache_set(key, {"data": payload, "count": len(filtered)}, ttl=ttl)
             etag = f"W/{hash((path, bbox, len(filtered)))}"
-            return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+            return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
         except Exception:
             raise HTTPException(status_code=500, detail="failed to build inline response")
     # metadata-only response
     etag = f"W/{hash((path, result['count']))}"
-    return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+    ttl = polygons_ttl()
+    return JSONResponse(content=result, headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
 
 @router.get("/v1/polygons/tiles/{dataset}/{z}/{x}/{y}")
 def get_polygon_tile(
@@ -104,8 +107,9 @@ def get_polygon_tile(
             if gb and bbox_intersects(gb, bbox):
                 filtered.append(feat)
         payload = {"type": "FeatureCollection", "features": filtered}
-        cache_set(key, payload, ttl=30)
+        ttl = polygons_ttl()
+        cache_set(key, payload, ttl=ttl)
         etag = f"W/{hash((path, z, x, y, len(filtered)))}"
-        return JSONResponse(content=payload, headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
+        return JSONResponse(content=payload, headers={"ETag": etag, "Cache-Control": f"public, max-age={ttl}"})
     except Exception:
         raise HTTPException(status_code=500, detail="failed to build tile")

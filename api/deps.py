@@ -18,3 +18,19 @@ def get_ea_client() -> EAClient:
 
 def rate_limiter(req: Request) -> None:
     rate_limit(req)
+
+def _get_ttl(env_name: str, default: int = 30) -> int:
+    val = os.getenv(env_name)
+    try:
+        return int(val) if val else default
+    except Exception:
+        return default
+
+def warnings_ttl() -> int:
+    return _get_ttl("WARNINGS_TTL", 30)
+
+def polygons_ttl() -> int:
+    return _get_ttl("POLYGONS_TTL", 30)
+
+def measurements_ttl() -> int:
+    return _get_ttl("MEASUREMENTS_TTL", 30)
