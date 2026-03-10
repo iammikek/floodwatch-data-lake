@@ -34,6 +34,9 @@ class ApiHeadersETagTests(unittest.TestCase):
         self.assertIn("Cache-Control", r.headers)
         self.assertTrue(r.headers["ETag"])
         self.assertTrue(r.headers["Cache-Control"])
+        self.assertIn("X-RateLimit-Limit", r.headers)
+        self.assertIn("X-RateLimit-Remaining", r.headers)
+        self.assertIn("X-RateLimit-Reset", r.headers)
 
     def test_polygons_inline_etag_present(self):
         client = TestClient(app)
@@ -52,6 +55,9 @@ class ApiHeadersETagTests(unittest.TestCase):
         self.assertIn("Cache-Control", r.headers)
         self.assertTrue(r.headers["ETag"])
         self.assertTrue(r.headers["Cache-Control"])
+        self.assertIn("X-RateLimit-Limit", r.headers)
+        self.assertIn("X-RateLimit-Remaining", r.headers)
+        self.assertIn("X-RateLimit-Reset", r.headers)
 
     def test_polygons_tile_etag_present(self):
         client = TestClient(app)
@@ -64,3 +70,6 @@ class ApiHeadersETagTests(unittest.TestCase):
         self.assertIn("Cache-Control", r.headers)
         self.assertTrue(r.headers["ETag"])
         self.assertTrue(r.headers["Cache-Control"])
+        self.assertIn("X-RateLimit-Limit", r.headers)
+        self.assertIn("X-RateLimit-Remaining", r.headers)
+        self.assertIn("X-RateLimit-Reset", r.headers)
