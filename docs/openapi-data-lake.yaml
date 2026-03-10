@@ -272,21 +272,58 @@ paths:
                 properties:
                   items:
                     $ref: '#/components/schemas/WarningList'
-              example:
-                items:
-                  - id: "flood-123"
-                    severity: "Flood Warning"
-                    title: "Flooding expected in low lying areas near river"
-                    issued_at: "2026-03-10T08:00:00Z"
-                    updated_at: "2026-03-10T09:00:00Z"
-                    geometry:
-                      type: "Polygon"
-                      coordinates:
-                        - - [ -2.60, 51.45 ]
-                          - [ -2.59, 51.46 ]
-                          - [ -2.58, 51.45 ]
-                          - [ -2.60, 51.45 ]
-                    source: "ea:flood-monitoring"
+              examples:
+                region:
+                  summary: Region scoped warnings (near centers)
+                  value:
+                    items:
+                      - id: "flood-123"
+                        severity: "Flood Warning"
+                        title: "Flooding expected in low lying areas near river"
+                        issued_at: "2026-03-10T08:00:00Z"
+                        updated_at: "2026-03-10T09:00:00Z"
+                        geometry:
+                          type: "Polygon"
+                          coordinates:
+                            - - [ -2.60, 51.45 ]
+                              - [ -2.59, 51.46 ]
+                              - [ -2.58, 51.45 ]
+                              - [ -2.60, 51.45 ]
+                        source: "ea:flood-monitoring"
+                bbox:
+                  summary: Filter by bounding box
+                  value:
+                    items:
+                      - id: "flood-234"
+                        severity: "Flood Alert"
+                        title: "Low lying areas in bbox"
+                        issued_at: "2026-03-10T10:00:00Z"
+                        updated_at: "2026-03-10T11:00:00Z"
+                        geometry:
+                          type: "Polygon"
+                          coordinates:
+                            - - [ -2.70, 51.40 ]
+                              - [ -2.69, 51.41 ]
+                              - [ -2.68, 51.40 ]
+                              - [ -2.70, 51.40 ]
+                        source: "ea:flood-monitoring"
+                county:
+                  summary: Filter by county
+                  value:
+                    items:
+                      - id: "flood-345"
+                        severity: "Flood Warning"
+                        title: "County level warning"
+                        issued_at: "2026-03-11T06:00:00Z"
+                        updated_at: "2026-03-11T07:00:00Z"
+                        geometry:
+                          type: "Polygon"
+                          coordinates:
+                            - - [ -3.00, 51.10 ]
+                              - [ -2.99, 51.11 ]
+                              - [ -2.98, 51.10 ]
+                              - [ -3.00, 51.10 ]
+                        source: "ea:flood-monitoring"
   /v1/retrieve-context:
     get:
       summary: Retrieve signals and snippets for RAG
