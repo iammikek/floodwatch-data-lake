@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Query, Request, Depends
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from api.models import MeasurementsResponse, Station, SeriesPoint
@@ -48,4 +50,7 @@ def get_measurements(
         window={"from": f, "to": t},
         provenance={"as_of": now, "source": "lake"},
     )
-    return resp
+    cnt = len(series)
+    key = f"measurements:{measure_id or station_id}:{aggregate}:{f.isoformat()}:{t.isoformat()}:{page}:{limit}"
+    etag = f"W/{hash((key, cnt))}"
+    return JSONResponse(content=jsonable_encoder(resp), headers={"ETag": etag, "Cache-Control": "public, max-age=30"})
