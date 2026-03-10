@@ -191,6 +191,34 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MeasurementsResponse' }
+              examples:
+                raw:
+                  summary: Raw observations
+                  value:
+                    station: { id: "ST01", name: "River Avon Station" }
+                    series:
+                      - { t: "2026-03-10T00:00:00Z", value: 1.21, agg: "raw" }
+                      - { t: "2026-03-10T00:15:00Z", value: 1.24, agg: "raw" }
+                      - { t: "2026-03-10T00:30:00Z", value: 1.26, agg: "raw" }
+                    window:
+                      from: "2026-03-10T00:00:00Z"
+                      to: "2026-03-10T01:00:00Z"
+                    provenance:
+                      as_of: "2026-03-10T01:00:00Z"
+                      source: "lake"
+                hour:
+                  summary: Hourly aggregates
+                  value:
+                    station: { id: "ST01", name: "River Avon Station" }
+                    series:
+                      - { t: "2026-03-10T00:00:00Z", value: 1.24, agg: "hour" }
+                      - { t: "2026-03-10T01:00:00Z", value: 1.31, agg: "hour" }
+                    window:
+                      from: "2026-03-10T00:00:00Z"
+                      to: "2026-03-10T02:00:00Z"
+                    provenance:
+                      as_of: "2026-03-10T02:00:00Z"
+                      source: "lake"
   /v1/rainfall:
     get:
       summary: Get rainfall daily series for a region or cell
@@ -237,6 +265,21 @@ paths:
                 properties:
                   items:
                     $ref: '#/components/schemas/WarningList'
+              example:
+                items:
+                  - id: "flood-123"
+                    severity: "Flood Warning"
+                    title: "Flooding expected in low lying areas near river"
+                    issued_at: "2026-03-10T08:00:00Z"
+                    updated_at: "2026-03-10T09:00:00Z"
+                    geometry:
+                      type: "Polygon"
+                      coordinates:
+                        - - [ -2.60, 51.45 ]
+                          - [ -2.59, 51.46 ]
+                          - [ -2.58, 51.45 ]
+                          - [ -2.60, 51.45 ]
+                    source: "ea:flood-monitoring"
   /v1/retrieve-context:
     get:
       summary: Retrieve signals and snippets for RAG
@@ -330,6 +373,35 @@ paths:
                   data:
                     type: object
                     description: Optional GeoJSON FeatureCollection when inline=true
+              examples:
+                metadata:
+                  summary: Metadata only (no inline)
+                  value:
+                    region_id: "SOM"
+                    dataset: "flood_zones"
+                    format: "simplified"
+                    path: "data/curated/ea/flood_zones/SOM_fz2_3_simplified.geojson"
+                    count: 12450
+                inline:
+                  summary: Inline FeatureCollection
+                  value:
+                    region_id: "SOM"
+                    dataset: "flood_zones"
+                    format: "simplified"
+                    path: "data/curated/ea/flood_zones/SOM_fz2_3_simplified.geojson"
+                    count: 3
+                    data:
+                      type: "FeatureCollection"
+                      features:
+                        - type: "Feature"
+                          properties: { id: "fz-1" }
+                          geometry:
+                            type: "Polygon"
+                            coordinates:
+                              - - [ -2.70, 51.10 ]
+                                - [ -2.69, 51.11 ]
+                                - [ -2.68, 51.10 ]
+                                - [ -2.70, 51.10 ]
   /v1/polygons/tiles/{dataset}/{z}/{x}/{y}:
     get:
       summary: Get polygons as a tile FeatureCollection for a Web Mercator tile
@@ -371,3 +443,15 @@ paths:
               schema:
                 type: object
                 description: GeoJSON FeatureCollection
+              example:
+                type: "FeatureCollection"
+                features:
+                  - type: "Feature"
+                    properties: { id: "tile-fz-1" }
+                    geometry:
+                      type: "Polygon"
+                      coordinates:
+                        - - [ -2.70, 51.10 ]
+                          - [ -2.69, 51.11 ]
+                          - [ -2.68, 51.10 ]
+                          - [ -2.70, 51.10 ]
