@@ -65,6 +65,36 @@ Data ingestion and API for UK flood monitoring, curated polygons, and time‑ser
 - Agents: [AGENTS.md](AGENTS.md)
 
 ## API Examples
+- Measurements (raw)
+  
+  ```bash
+  curl "http://localhost:8000/v1/measurements?measure_id=TESTMEASURE&from=2026-03-10T00:00:00Z&to=2026-03-10T02:00:00Z&aggregate=raw&limit=100"
+  ```
+
+- Measurements (hourly)
+  
+  ```bash
+  curl "http://localhost:8000/v1/measurements?measure_id=TESTMEASURE&from=2026-03-10T00:00:00Z&to=2026-03-10T02:00:00Z&aggregate=hour&limit=100"
+  ```
+
+- Polygons (inline metadata + small bbox)
+  
+  ```bash
+  curl "http://localhost:8000/v1/polygons?dataset=flood_zones&region=SOM&format=simplified&inline=true&bbox=-3.90,50.90,-2.20,51.40"
+  ```
+
+- Polygons tiles (Web Mercator)
+  
+  ```bash
+  curl "http://localhost:8000/v1/polygons/tiles/flood_zones/10/511/340?region=SOM&format=simplified"
+  ```
+
+- Warnings (with geometry; min severity = Flood Alert)
+  
+  ```bash
+  curl "http://localhost:8000/v1/warnings?region=SOM&min_severity=3"
+  ```
+ 
 - Warnings (county filter, no region)
   
   ```bash
