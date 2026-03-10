@@ -15,16 +15,15 @@ def get_warnings(
     bbox: Optional[str] = None,
     region: Optional[str] = Query(None, pattern="^(BRI|SOM|DOR|DEV|CON)$"),
     since: Optional[datetime] = None,
+    county: Optional[str] = None,
     _: None = Depends(rate_limiter),
     ea: EAClient = Depends(get_ea_client),
     min_severity: Optional[int] = Query(3, ge=1, le=4),
 ):
-    key = f"warnings:{build_key(bbox, region, since)}"
+    key = f"warnings:{build_key(bbox, region, since)}:{county or ''}:{min_severity or ''}"
     cached = cache_get(key)
     if cached is not None:
         return cached
-    resp = list_warnings(bbox, region, since, ea)
-    cache_set(key, resp, ttl=30)
-    resp = list_warnings(bbox, region, since, ea, min_severity=min_severity)
+    resp = list_warnings(bbox, region, since, ea, min_severity=min_severity, county=county)
     cache_set(key, resp, ttl=30)
     return resp

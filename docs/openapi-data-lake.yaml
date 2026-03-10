@@ -253,8 +253,15 @@ paths:
           name: region
           schema: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
         - in: query
+          name: county
+          schema: { type: string }
+          description: Optional county filter passed through to EA floods endpoint
+        - in: query
           name: since
           schema: { type: string, format: date-time }
+        - in: query
+          name: min_severity
+          schema: { type: integer, enum: [1,2,3,4], default: 3 }
       responses:
         '200':
           description: OK
