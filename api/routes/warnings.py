@@ -17,11 +17,14 @@ def get_warnings(
     since: Optional[datetime] = None,
     _: None = Depends(rate_limiter),
     ea: EAClient = Depends(get_ea_client),
+    min_severity: Optional[int] = Query(3, ge=1, le=4),
 ):
     key = f"warnings:{build_key(bbox, region, since)}"
     cached = cache_get(key)
     if cached is not None:
         return cached
     resp = list_warnings(bbox, region, since, ea)
+    cache_set(key, resp, ttl=30)
+    resp = list_warnings(bbox, region, since, ea, min_severity=min_severity)
     cache_set(key, resp, ttl=30)
     return resp
