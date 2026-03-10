@@ -100,3 +100,9 @@ Data ingestion and API for UK flood monitoring, curated polygons, and time‑ser
   ```bash
   curl "http://localhost:8000/v1/warnings?county=Somerset&min_severity=2"
   ```
+ 
+- Warnings (bbox filter)
+  
+  ```bash
+  curl "http://localhost:8000/v1/warnings?bbox=-3.00,50.90,-2.50,51.20&min_severity=3"
+  ```
