@@ -46,6 +46,124 @@ Data ingestion and API for UK flood monitoring, curated polygons, and time‑ser
 - Rate limits and caching:
   - In‑process TTL cache; per‑IP quotas
 
+## Architecture Diagrams
+
+### System Overview
+
+```mermaid
+graph LR
+  EA[(Environment Agency APIs)]
+  Worker[lake-worker]
+  Raw[data/raw/**]
+  Curated[data/curated/**]
+  API[lake-api (FastAPI)]
+  Clients[Clients]
+
+  EA --> Worker
+  Worker --> Raw
+  Worker --> Curated
+  Raw --> API
+  Curated --> API
+  Clients --> API
+  API --> Clients
+
+  subgraph API Internals
+    RL[X-RateLimit headers]
+    TTL[Cache-Control TTL + ETag]
+  end
+  API --> RL
+  API --> TTL
+```
+
+### Measurements Request Flow (bbox-aware)
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as lake-api
+  participant D as Discovery (stations/measures)
+  participant FS as File Store (NDJSON)
+
+  C->>A: GET /v1/measurements?measure_id=...&bbox=...
+  A->>D: load_latest_measures_map()
+  A->>D: load_latest_stations()
+  A->>A: bbox check (station inside?)
+  alt outside bbox
+    A->>C: 200 { series: [], station { name, lat, lng } }
+  else inside bbox
+    A->>FS: read_ndjson_gz(month files)
+    A->>A: aggregate_points(raw|hour|day)
+    A->>C: 200 series + station
+  end
+  Note right of A: Adds ETag, Cache-Control, X-RateLimit headers
+```
+
+### Polygons Flow (inline and tiles)
+
+```mermaid
+flowchart TD
+  C[Client] -->|GET /v1/polygons| A[lake-api]
+  A -->|open curated file| Cur[data/curated/ea/...geojson]
+  A -->|inline=true| Filter[filter by bbox (small only)]
+  A -->|tiles| Tile[compute tile bbox and filter]
+  A --> Cache[cache_set + ETag + TTL]
+  Cache --> C
+```
+
+## Storage Sizing
+
+- Drivers
+  - Raw readings NDJSON per measure per month at data/raw/ea/readings/{measure}/{YYYY}-{MM}.ndjson.gz
+  - Discovery dumps (stations, measures) at data/raw/ea/stations/*.ndjson.gz and data/raw/ea/measures/*.ndjson.gz
+  - Curated polygons GeoJSON at data/curated/ea/**
+  - Logs for worker/API containers
+
+- Rule‑of‑Thumb
+  - Hydrology readings: ~0.2 MB per measure per month (15‑min cadence, gzipped)
+  - Stations snapshot: ~5–20 MB gz
+  - Measures snapshot: ~3–15 MB gz
+  - Flood Zones per region (simplified): ~20–80 MB
+  - RSE per scenario per region: ~10–60 MB
+
+- Formulas
+  - Hydrology total ≈ 0.2 MB × measures × months; months = years × 12
+  - Discovery total ≈ (stations + measures per snapshot) × snapshots retained
+  - Polygons total ≈ sum(region flood_zones) + sum(region × scenarios RSE)
+
+- Examples
+  - 1 region, 500 measures, 5 years → hydrology ≈ 6 GB; polygons ≈ 60–320 MB; discovery ≈ 40–70 MB; total ≈ 6.1–6.3 GB
+  - 5 regions, 2,000 measures, 10 years → hydrology ≈ 48 GB; polygons ≈ 0.3–1.6 GB; discovery ≈ 0.2–0.5 GB; total ≈ 49–51 GB
+  - API‑only with curated polygons → ~0.35–1.7 GB
+
+- Control Footprint
+  - Scope by region and parameters (level, flow)
+  - Limit backfill windows (FROM/TO)
+  - Retain minimal discovery snapshots
+  - Prefer simplified polygons when suitable
+  - Use MAX_STATIONS and MAX_MEASURES to throttle runs
+
+## Cloudflare Hosting (R2 + CDN)
+
+- Overview
+  - Store datasets in Cloudflare R2 (public bucket or behind CDN)
+  - Serve lake-api as stateless compute (Railway/Fly) reading files over HTTP
+
+- Configure API to read curated polygons remotely
+  - Set REMOTE_BASE_URL to the public base that contains curated files
+    - Example: https://cdn.example.com/ea
+  - File layout expectation
+    - Local: data/curated/ea/{region}_{scenario_or_fz2_3}_{simplified|normalized}.geojson
+    - Remote: {REMOTE_BASE_URL}/ea/{region}_{scenario_or_fz2_3}_{simplified|normalized}.geojson
+  - Behavior
+    - If local file exists, it is used
+    - If local file is missing and REMOTE_BASE_URL is set, API fetches via HTTP
+    - Endpoints: /v1/polygons and /v1/polygons/tiles/… support remote loading
+
+- Notes
+  - Prefer simplified files for lower latency and CDN cache friendliness
+  - Keep strong caching via ETag and Cache-Control; put CDN in front for free/cheap egress
+  - Raw NDJSON can also be hosted the same way; a similar adapter can be added later if needed
+
 ## Testing
 - API tests (inside lake-api container):
   - make test-api

@@ -1,0 +1,94 @@
+# Deployment & Hosting Options
+
+- Overview
+  - Goal: minimize cost while serving lake-api and static datasets reliably
+  - Current dataset size: ~3.1 GB (data/raw ≈ 1.2G, data/curated ≈ 2.0G)
+  - Rate-limit and caching headers are already implemented for API responses
+
+- Option A: Cloudflare R2 + CDN + Stateless API (Recommended)
+  - Storage
+    - Upload curated polygons under ea/ (e.g., SOM_fz2_3_simplified.geojson)
+    - Optional: upload raw NDJSON similarly under ea/readings/
+  - CDN
+    - Put Cloudflare CDN in front of the R2 bucket/path for public HTTP access
+  - API Configuration
+    - Set REMOTE_BASE_URL to CDN base, e.g., https://cdn.yourdomain
+    - Path mapping
+      - Local: data/curated/ea/{region}_{scenario_or_fz2_3}_{simplified|normalized}.geojson
+      - Remote: {REMOTE_BASE_URL}/ea/{region}_{scenario_or_fz2_3}_{simplified|normalized}.geojson
+    - Behavior
+      - If local file exists, it is used; otherwise API fetches via HTTP
+      - Endpoints /v1/polygons and /v1/polygons/tiles read remotely when needed
+  - Compute
+    - Deploy lake-api on Railway or Fly.io without persistent volumes
+  - Pros
+    - Lowest monthly cost (storage pennies per month + tiny compute)
+    - CDN offloads bandwidth; simple scale-out
+  - Cons
+    - Requires uploading datasets to R2 and setting REMOTE_BASE_URL
+
+- Railway Setup (lake-api)
+  - Create a new service pointing to this repository
+  - Set Start Command to either:
+    - ./scripts/start-api.sh
+    - uvicorn api.main:app --host 0.0.0.0 --port $PORT
+  - Environment Variables
+    - REMOTE_BASE_URL=https://cdn.yourdomain
+    - RL_LIMIT=3 (example), RL_WINDOW_S=60
+    - POLYGONS_TTL=300, WARNINGS_TTL=30, MEASUREMENTS_TTL=30
+  - Healthcheck
+    - Path: /healthz (lake-api exposes this)
+  - Notes
+    - scripts/start-api.sh uses ${PORT:-8000} to match Railway’s assigned port
+    - Keep CDN in front of R2 for zero egress and caching
+
+- Option B: Single VM (Hetzner/DigitalOcean) Running Docker Compose
+  - Setup
+    - Provision a small VM (e.g., Hetzner CX11 or DO Basic) and attach a 20–30 GB volume
+    - Clone repo, set .env, run docker compose up for lake-api and lake-worker
+    - Serve port 8000 behind Cloudflare or Nginx for TLS and caching
+  - Pros
+    - Minimal code/config changes; uses existing local data paths
+  - Cons
+    - You manage VM updates, backups, and monitoring
+
+- Option C: Railway-Only Container
+  - Setup
+    - Deploy lake-api as a container
+    - Prefer hosting large datasets externally (R2/CDN) instead of mounting multi-GB volumes
+  - Pros
+    - Simple deployment workflow
+  - Cons
+    - Persisting multi-GB data directly on the platform is less economical
+
+- Environment Variables
+  - REMOTE_BASE_URL: base URL for remote curated files (e.g., https://cdn.yourdomain)
+  - RL_LIMIT, RL_WINDOW_S: rate-limit configuration for API requests
+  - POLYGONS_TTL, WARNINGS_TTL, MEASUREMENTS_TTL: cache lifetimes for endpoints
+
+- Cost Notes
+  - Cloudflare R2 or Backblaze B2: very low $/GB-month; use CDN to minimize egress
+  - VM providers: base ~€4–€7/month plus volume cost per GB/month
+
+- Cost Estimates (approximate)
+  - Storage (per GB-month)
+    - Cloudflare R2: ~$0.015/GB-mo → 3.1 GB ≈ $0.05/mo
+    - Backblaze B2: ~$0.006/GB-mo → 3.1 GB ≈ $0.02/mo
+    - AWS S3 Standard: ~$0.023/GB-mo → 3.1 GB ≈ $0.07/mo
+  - Compute
+    - Railway: usage-based; small FastAPI service often ~$5–$10/mo at low traffic
+    - Fly.io: shared CPU 256–512 MB typically <$5/mo for low usage
+    - Hetzner CX11: ~€4.15/mo; volume ~€0.04/GB-mo (10 GB ≈ €0.40/mo)
+    - DigitalOcean Basic: ~$6–$7/mo; volume ~$0.10/GB-mo
+  - Egress and CDN
+    - R2 → Cloudflare CDN: zero egress fees between R2 and CDN
+    - Client egress served by CDN: depends on plan/traffic; high cache hit reduces origin reads
+  - Example totals (current ~3.1 GB dataset, low traffic)
+    - R2 + Cloudflare CDN + Railway API: storage ~$0.05/mo + compute ~$5–$10/mo
+    - B2 + Cloudflare CDN + Fly.io API: storage ~$0.02/mo + compute <$5/mo
+    - Single VM (Hetzner CX11) with 20 GB volume: ~€4.55/mo (compute + storage) + domain/DNS
+
+- Operational Guidance
+  - Prefer simplified polygons for better latency and lower bandwidth
+  - Keep ETag and Cache-Control headers; let CDN cache aggressively
+  - Backups: snapshot datasets in object storage; VM route should include volume snapshots

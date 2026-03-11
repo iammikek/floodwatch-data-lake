@@ -3,6 +3,7 @@ import json
 import math
 from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
+import httpx
 
 
 def curated_polygons_path(dataset: str, region: str, scenario: Optional[str], format_: str) -> str:
@@ -19,6 +20,31 @@ def curated_polygons_path(dataset: str, region: str, scenario: Optional[str], fo
         name = f"{region}_{scenario}"
     suffix = "_simplified" if format_ == "simplified" else "_normalized"
     return os.path.join(base_dir, f"{name}{suffix}.geojson")
+
+def _remote_base() -> Optional[str]:
+    base = os.getenv("REMOTE_BASE_URL")
+    if base and base.strip():
+        return base.rstrip("/")
+    return None
+
+def read_geojson_any(path: str) -> Dict[str, Any]:
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return json.load(f)
+    base = _remote_base()
+    if not base:
+        return {"type": "FeatureCollection", "features": []}
+    # Map local path 'data/curated/ea/<file>' to remote '<base>/ea/<file>'
+    parts = path.split("data/curated/")
+    key = parts[1] if len(parts) > 1 else os.path.basename(path)
+    url = f"{base}/{key.lstrip('/')}"
+    try:
+        client = httpx.Client(timeout=30, headers={"Accept": "application/geo+json, application/json;q=0.9"})
+        r = client.get(url)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {"type": "FeatureCollection", "features": []}
 
 def parse_bbox(bbox: str) -> List[float]:
     parts = [float(x) for x in bbox.split(",")]

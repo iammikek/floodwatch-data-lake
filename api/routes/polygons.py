@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List
 import os
 import json
 from api.models import PolygonsResponse
-from api.services.polygons import curated_polygons_path, parse_bbox, bbox_small, geom_bbox, bbox_intersects, tile_bbox
+from api.services.polygons import curated_polygons_path, parse_bbox, bbox_small, geom_bbox, bbox_intersects, tile_bbox, read_geojson_any
 from api.utils.cache import cache_get, cache_set
 from api.deps import rate_limiter, polygons_ttl
 
@@ -22,15 +22,12 @@ def get_polygons(
     rl: Dict[str, int] = Depends(rate_limiter),
 ):
     path = curated_polygons_path(dataset, region, scenario, format_)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="curated polygons not found")
     try:
-        with open(path, "r") as f:
-            data = json.load(f)
+        data = read_geojson_any(path)
         feats = data.get("features") or []
         cnt = len(feats) if isinstance(feats, list) else 0
     except Exception:
-        cnt = None
+        raise HTTPException(status_code=404, detail="curated polygons not found")
     result: Dict[str, Any] = {
         "region_id": region,
         "dataset": dataset,
@@ -55,8 +52,7 @@ def get_polygons(
             headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
             return JSONResponse(content=result, headers=headers)
         try:
-            with open(path, "r") as f:
-                doc = json.load(f)
+            doc = read_geojson_any(path)
             feats = doc.get("features") or []
             target = [w, s, e, n]
             filtered: List[Dict[str, Any]] = []
@@ -102,11 +98,8 @@ def get_polygon_tile(
         headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
         return JSONResponse(content=cached, headers=headers)
     try:
-        feats = []
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                doc = json.load(f)
-            feats = doc.get("features") or []
+        doc = read_geojson_any(path)
+        feats = doc.get("features") or []
         filtered = []
         for feat in feats:
             gb = geom_bbox(feat.get("geometry") or {})
