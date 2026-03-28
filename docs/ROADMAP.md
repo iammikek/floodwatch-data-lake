@@ -34,15 +34,14 @@
 - OpenAPI expanded for measurements, tiles, and warnings schema
 - Documentation: data‑flow diagrams with client examples; hosting options and costs
 - “Polygon Depth Summaries” design note and examples added to docs
+- CI pipeline with Docker targets for tests on push (GitHub Actions)
 
 ## Near‑Term Deliverables
 - Optional: Introduce Redis caching adapter; document error contracts
-- CI uses Docker targets to run tests on push
 - Add configurable rate‑limit hooks and broaden API tests where gaps remain
 
 ## Next Up (Highlighted)
 - Evaluate Redis caching adapter and DI for cache/config
-- CI pipeline with Docker targets for tests on push
 
 ## Mid‑Term Deliverables
 - PostGIS ingestion for curated polygons and time series (schemas + indexes)
