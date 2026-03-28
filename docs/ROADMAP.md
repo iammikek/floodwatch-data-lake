@@ -30,18 +30,19 @@
 - MVC refactor: routes/services/models/utilities separated
 - OpenAPI and tests updated; FastAPI /healthz live; Dockerized tests passing (Python 3.11)
 - Makefile workflows: up/down/logs, test, test‑api
+- /v1/warnings integrated and tested (geometry + severity + bbox/region filters)
+- OpenAPI expanded for measurements, tiles, and warnings schema
+- Documentation: data‑flow diagrams with client examples; hosting options and costs
+- “Polygon Depth Summaries” design note and examples added to docs
 
 ## Near‑Term Deliverables
-- Integrate EA flood warnings into /v1/warnings (geometry + severity)
-- Expand OpenAPI to document measurements and tiles + warnings schema
 - Optional: Introduce Redis caching adapter; document error contracts
 - CI uses Docker targets to run tests on push
+- Add configurable rate‑limit hooks and broaden API tests where gaps remain
 
 ## Next Up (Highlighted)
-- Wire EA warnings feed into /v1/warnings with geometry/levels
-- Complete OpenAPI for measurements/tiles/warnings
-- Add configurable rate‑limit hooks and more API tests
 - Evaluate Redis caching adapter and DI for cache/config
+- CI pipeline with Docker targets for tests on push
 
 ## Mid‑Term Deliverables
 - PostGIS ingestion for curated polygons and time series (schemas + indexes)
@@ -49,6 +50,11 @@
 - Streaming downloads for curated layers (gzip, range)
 - Aggregations: daily/hourly rollups for hydrology and rainfall
 - Observability: structured logs and basic metrics; SLO tracking
+- Polygon Depth Summaries (depends on depth rasters from Phase 2)
+  - Endpoint: GET /v1/polygons/depth
+    - Query: dataset, region, scenario (for rse), format (simplified|normalized), bbox (optional)
+    - Returns: per‑feature stats (min/mean/max/p95 depth) for polygons intersecting the bbox or region
+  - Notes: samples HiPIMS depth rasters by polygon; returns compact JSON; may include signed URLs to tiles/artifacts
 
 ## Long‑Term (Phase 2)
 - HiPIMS integration for corridor‑scale flood simulation and route depth
@@ -60,6 +66,18 @@
 - Curated polygons available per region/scenario; simplified for web maps
 - API operational: /healthz, /v1/polygons inline/metadata; tests green in Docker
 - Documentation and OpenAPI reflect implemented endpoints and parameters
+
+## Future API Sketch (Depth Summaries)
+- GET /v1/polygons/depth
+  - Parameters:
+    - dataset: flood_zones|rse
+    - region: BRI|SOM|DOR|DEV|CON
+    - scenario: defended_1in100_1in200|undefended_1in100_1in200|defended_1in1000|undefended_1in1000 (rse only)
+    - format: simplified|normalized
+    - bbox: west,south,east,north (optional)
+  - Response:
+    - features: [{ id, stats: { min, mean, max, p95 }, geom_bbox }]
+    - provenance: { source: hipims, as_of }
 
 ## References
 - Architecture: docs/architecture-plan.md

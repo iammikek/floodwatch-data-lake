@@ -76,6 +76,10 @@ If you want, I can sketch the two-app monorepo layout and the initial endpoints/
 - POST /v1/jobs/backfill
   - Body: dataset, from, to, slice_size
   - Returns: job id and status URL
+- FUTURE: GET /v1/polygons/depth
+  - Purpose: summarize water depth over polygons by sampling depth rasters
+  - Query: dataset, region, scenario (rse), bbox(optional), format
+  - Returns: per‑feature stats (min/mean/max/p95) and provenance
 
 ## Auth and SLAs
 
@@ -255,6 +259,7 @@ If you want, I can sketch the two-app monorepo layout and the initial endpoints/
     - Depth rasters per step and max‑depth composite.
     - Depth‑over‑road time series at sampled points along routes.
     - Max/mean depth summaries per road segment.
+    - Polygon depth summaries for Flood Zones/RSE features (min/mean/max/p95) for reporting and API.
 
 - Orchestration & Jobs
   - API

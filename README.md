@@ -2,6 +2,10 @@
 
 Data ingestion and API for UK flood monitoring, curated polygons, and time‑series access.
 
+## Start Here
+- Read the Data Flow guide to see how data is acquired, curated, and served: [docs/data-flow.md](docs/data-flow.md)
+- For deployment, Cloudflare/Railway setup, and cost notes: [docs/hosting-options.md](docs/hosting-options.md)
+
 ## Overview
 - Services
   - lake-worker: runs ingestion and backfill jobs
@@ -178,6 +182,8 @@ flowchart TD
 - Changelog: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - OpenAPI: [docs/openapi-data-lake.yaml](docs/openapi-data-lake.yaml)
 - Architecture: [docs/architecture-plan.md](docs/architecture-plan.md)
+- Data Flow: [docs/data-flow.md](docs/data-flow.md)
+- Hosting Options: [docs/hosting-options.md](docs/hosting-options.md)
 - Data Sources: [docs/data-sources.md](docs/data-sources.md)
 - Project Brief: [docs/project-brief.md](docs/project-brief.md)
 - Agents: [AGENTS.md](AGENTS.md)
