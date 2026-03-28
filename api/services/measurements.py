@@ -1,6 +1,8 @@
 import os
 import gzip
 import json
+import io
+import httpx
 from typing import Any, Dict, List, Tuple, Optional
 from datetime import datetime, timezone, timedelta
 from api.models import SeriesPoint
@@ -25,17 +27,42 @@ def month_iter(start: datetime, end: datetime) -> List[Tuple[int, int]]:
 
 def read_ndjson_gz(path: str) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
-    if not os.path.exists(path):
+    if os.path.exists(path):
+        with gzip.open(path, "rt") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except Exception:
+                    continue
         return items
-    with gzip.open(path, "rt") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                items.append(json.loads(line))
-            except Exception:
-                continue
+    base = os.getenv("REMOTE_BASE_URL")
+    if base:
+        base = base.rstrip("/")
+        parts = path.split("data/raw/")
+        key = parts[1] if len(parts) > 1 else os.path.basename(path)
+        url = f"{base}/{key.lstrip('/')}"
+        try:
+            client = httpx.Client(timeout=30, headers={"Accept": "application/x-ndjson, application/json;q=0.9"})
+            r = client.get(url)
+            r.raise_for_status()
+            buf = io.BytesIO(r.content)
+            with gzip.GzipFile(fileobj=buf, mode="rb") as gf:
+                for raw in gf.read().splitlines():
+                    try:
+                        line = raw.decode("utf-8").strip()
+                    except Exception:
+                        continue
+                    if not line:
+                        continue
+                    try:
+                        items.append(json.loads(line))
+                    except Exception:
+                        continue
+        except Exception:
+            return []
     return items
 
 def series_points(items: List[Dict[str, Any]], from_: datetime, to: datetime) -> List[SeriesPoint]:
