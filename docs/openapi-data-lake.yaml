@@ -156,6 +156,11 @@ paths:
   /v1/measurements:
     get:
       summary: Get measurements for a station or measure
+      description: >
+        Returns hydrology measurements for a station or measure with optional aggregation (raw/hour/day) and pagination.
+        Data is read from local gz NDJSON files when present or fetched over HTTP when REMOTE_BASE_URL is set.
+        When no data is available locally or remotely, the endpoint returns 200 with an empty series and appropriate caching headers.
+        When bbox is provided, the station is resolved via discovery data and an empty series is returned if the station is outside the bbox.
       parameters:
         - in: query
           name: station_id
@@ -408,6 +413,10 @@ paths:
   /v1/polygons:
     get:
       summary: Get curated polygons metadata or inline FeatureCollection
+      description: >
+        Returns curated polygons metadata by default. When inline=true and a small bbox is supplied, returns a GeoJSON FeatureCollection.
+        Polygons are loaded from local curated GeoJSON if present; if missing and REMOTE_BASE_URL is set, they are fetched over HTTP.
+        If polygons are not available locally or remotely, the endpoint returns 200 with an empty FeatureCollection and caching headers.
       parameters:
         - in: query
           name: dataset
@@ -497,6 +506,10 @@ paths:
   /v1/polygons/tiles/{dataset}/{z}/{x}/{y}:
     get:
       summary: Get polygons as a tile FeatureCollection for a Web Mercator tile
+      description: >
+        Returns a GeoJSON FeatureCollection for the requested tile by intersecting the tile bbox with the curated polygons.
+        Polygons are loaded from local curated GeoJSON if present; if missing and REMOTE_BASE_URL is set, they are fetched over HTTP.
+        If polygons are not available locally or remotely, the endpoint returns 200 with an empty FeatureCollection and caching headers.
       parameters:
         - in: path
           name: dataset
@@ -551,15 +564,46 @@ paths:
               schema:
                 type: object
                 description: GeoJSON FeatureCollection
-              example:
-                type: "FeatureCollection"
-                features:
-                  - type: "Feature"
-                    properties: { id: "tile-fz-1" }
-                    geometry:
-                      type: "Polygon"
-                      coordinates:
-                        - - [ -2.70, 51.10 ]
-                          - [ -2.69, 51.11 ]
-                          - [ -2.68, 51.10 ]
-                          - [ -2.70, 51.10 ]
+              examples:
+                flood_zones_simplified:
+                  summary: Flood Zones (simplified)
+                  value:
+                    type: "FeatureCollection"
+                    features:
+                      - type: "Feature"
+                        properties: { id: "fz-1" }
+                        geometry:
+                          type: "Polygon"
+                          coordinates:
+                            - - [ -2.70, 51.10 ]
+                              - [ -2.69, 51.11 ]
+                              - [ -2.68, 51.10 ]
+                              - [ -2.70, 51.10 ]
+                rse_defended_1in100_1in200:
+                  summary: RSE defended 1-in-100/200 (simplified)
+                  value:
+                    type: "FeatureCollection"
+                    features:
+                      - type: "Feature"
+                        properties: { id: "rse-def-100-200-1" }
+                        geometry:
+                          type: "Polygon"
+                          coordinates:
+                            - - [ -3.00, 51.20 ]
+                              - [ -2.99, 51.21 ]
+                              - [ -2.98, 51.20 ]
+                              - [ -3.00, 51.20 ]
+                flood_zones_normalized:
+                  summary: Flood Zones (normalized)
+                  value:
+                    type: "FeatureCollection"
+                    features:
+                      - type: "Feature"
+                        properties: { id: "fz-norm-1", area_m2: 12345 }
+                        geometry:
+                          type: "Polygon"
+                          coordinates:
+                            - - [ -2.80, 51.00 ]
+                              - [ -2.79, 51.01 ]
+                              - [ -2.78, 51.00 ]
+                              - [ -2.80, 51.00 ]
