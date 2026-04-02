@@ -1,0 +1,17 @@
+aws_region              = "eu-west-2"
+project_name            = "floodwatch-data-lake"
+cdn_domain_name         = "cdn.example.com"
+# CloudFront requires ACM cert in us-east-1
+acm_certificate_arn     = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# ECR image identifiers (account.dkr.ecr.region.amazonaws.com/repo:tag)
+api_image_identifier    = "123456789012.dkr.ecr.eu-west-2.amazonaws.com/floodwatch-api:main"
+worker_image_identifier = "123456789012.dkr.ecr.eu-west-2.amazonaws.com/floodwatch-worker:main"
+
+# Networking
+vpc_id                  = "vpc-0123456789abcdef0"
+private_subnet_ids      = ["subnet-11111111", "subnet-22222222"]
+ecs_security_group_id   = "sg-0123456789abcdef0"
+
+# Schedule for worker backfill (EventBridge)
+worker_schedule_expression = "rate(1 day)"

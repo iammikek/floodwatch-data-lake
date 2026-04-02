@@ -184,6 +184,7 @@ flowchart TD
 - Architecture: [docs/architecture-plan.md](docs/architecture-plan.md)
 - Data Flow: [docs/data-flow.md](docs/data-flow.md)
 - Hosting Options: [docs/hosting-options.md](docs/hosting-options.md)
+- AWS Deployment: [docs/aws-deploy.md](docs/aws-deploy.md)
 - Data Sources: [docs/data-sources.md](docs/data-sources.md)
 - Project Brief: [docs/project-brief.md](docs/project-brief.md)
 - Agents: [AGENTS.md](AGENTS.md)
