@@ -145,3 +145,37 @@ curl "$(terraform output -raw apprunner_service_url)/healthz"
 ```bash
 terraform destroy -var-file=terraform.tfvars
 ```
+
+## AWS Study Checklist
+
+- IAM and CLI
+  - [ ] Create an IAM user with programmatic access
+  - [ ] Attach least‑privilege S3 policies (read curated; write raw if needed)
+  - [ ] Configure aws configure and verify aws sts get-caller-identity
+- S3 Basics
+  - [ ] Create a test bucket for curated data
+  - [ ] Upload a sample file into ea/ and retrieve it over HTTPS
+  - [ ] Add a temporary public‑read bucket policy for testing or use presigned URLs
+  - [ ] Add a lifecycle rule to transition old objects to infrequent access
+- EC2 Quick Start
+  - [ ] Launch a t2.micro/t3.micro in your region
+  - [ ] Security Group: allow SSH from your IP; allow TCP 8000 for testing
+  - [ ] Install Docker/Compose and run lake‑api
+  - [ ] Set REMOTE_BASE_URL to your S3 bucket URL and verify /healthz and /v1/polygons
+- Caching & Headers
+  - [ ] Inspect ETag and Cache‑Control from responses
+  - [ ] Re‑request with If‑None‑Match to see 304 behavior
+- Optional: CloudFront (CDN)
+  - [ ] Request ACM certificate in us‑east‑1 for cdn.yourdomain
+  - [ ] Create a distribution with Origin Access Control to your S3 bucket
+  - [ ] Point a CNAME to CloudFront and set REMOTE_BASE_URL to the CDN URL
+- Optional: App Runner (Managed API)
+  - [ ] Build/push API image to ECR and create an App Runner service
+  - [ ] Set env vars (REMOTE_BASE_URL, TTLs, RL limits), test /healthz
+- Optional: ECS + EventBridge (Worker)
+  - [ ] Define an ECS Fargate task from the worker image
+  - [ ] RunTask ad‑hoc with FROM/TO/REGION; add an EventBridge schedule
+- Terraform Dry Run
+  - [ ] Copy terraform.tfvars.example to terraform.tfvars with placeholders
+  - [ ] terraform init and terraform plan to review resources and projected changes
+  - [ ] Destroy after testing: terraform destroy

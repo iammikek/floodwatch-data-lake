@@ -13,3 +13,94 @@ pipelines:
           - python -m xmlrunner discover -s tests -v -o test-reports
         artifacts:
           - test-reports/**
+  branches:
+    main:
+      - step:
+          name: Tests
+          caches:
+            - pip
+          script:
+            - python -V
+            - pip install -r requirements.txt
+            - mkdir -p test-reports
+            - python -m xmlrunner discover -s tests -v -o test-reports
+          artifacts:
+            - test-reports/**
+      - step:
+          name: Build & Push ECR Images
+          image: atlassian/default-image:3
+          services:
+            - docker
+          caches:
+            - docker
+          script:
+            - apt-get update && apt-get install -y jq
+            - pip install awscli
+            - test -n "$AWS_ACCESS_KEY_ID"
+            - test -n "$AWS_SECRET_ACCESS_KEY"
+            - test -n "$AWS_REGION"
+            - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            - aws ecr describe-repositories --repository-names "${ECR_API_REPO:-floodwatch-api}" || aws ecr create-repository --repository-name "${ECR_API_REPO:-floodwatch-api}"
+            - aws ecr describe-repositories --repository-names "${ECR_WORKER_REPO:-floodwatch-worker}" || aws ecr create-repository --repository-name "${ECR_WORKER_REPO:-floodwatch-worker}"
+            - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+            - docker build -t floodwatch-api -f Dockerfile .
+            - docker tag floodwatch-api:latest "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_API_REPO:-floodwatch-api}:$BITBUCKET_COMMIT"
+            - docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_API_REPO:-floodwatch-api}:$BITBUCKET_COMMIT"
+            - docker build -t floodwatch-worker -f Dockerfile .
+            - docker tag floodwatch-worker:latest "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_WORKER_REPO:-floodwatch-worker}:$BITBUCKET_COMMIT"
+            - docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_WORKER_REPO:-floodwatch-worker}:$BITBUCKET_COMMIT"
+          artifacts:
+            - ecr-images.txt
+      - step:
+          name: Terraform Plan
+          image: hashicorp/terraform:1.6
+          caches:
+            - pip
+          script:
+            - apk add --no-cache python3 py3-pip jq
+            - pip install awscli
+            - test -n "$AWS_ACCESS_KEY_ID"
+            - test -n "$AWS_SECRET_ACCESS_KEY"
+            - test -n "$AWS_REGION"
+            - test -n "$PROJECT_NAME"
+            - test -n "$CDN_DOMAIN_NAME"
+            - test -n "$ACM_CERT_ARN"
+            - test -n "$VPC_ID"
+            - test -n "$PRIVATE_SUBNET_IDS_JSON"
+            - test -n "$ECS_SG_ID"
+            - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            - export API_IMAGE="${API_IMAGE:-$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_API_REPO:-floodwatch-api}:$BITBUCKET_COMMIT}"
+            - export WORKER_IMAGE="${WORKER_IMAGE:-$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_WORKER_REPO:-floodwatch-worker}:$BITBUCKET_COMMIT}"
+            - cd infra/aws/terraform
+            - |
+              cat > terraform.auto.tfvars <<'EOF'
+              aws_region              = "${AWS_REGION}"
+              project_name            = "${PROJECT_NAME}"
+              cdn_domain_name         = "${CDN_DOMAIN_NAME}"
+              acm_certificate_arn     = "${ACM_CERT_ARN}"
+              api_image_identifier    = "${API_IMAGE}"
+              worker_image_identifier = "${WORKER_IMAGE}"
+              vpc_id                  = "${VPC_ID}"
+              private_subnet_ids      = ${PRIVATE_SUBNET_IDS_JSON}
+              ecs_security_group_id   = "${ECS_SG_ID}"
+              worker_schedule_expression = "${WORKER_SCHEDULE:-rate(1 day)}"
+              EOF
+            - terraform init
+            - terraform plan -out=tfplan
+          artifacts:
+            - infra/aws/terraform/tfplan
+      - step:
+          name: Terraform Apply
+          image: hashicorp/terraform:1.6
+          trigger: manual
+          script:
+            - apk add --no-cache python3 py3-pip jq
+            - pip install awscli
+            - cd infra/aws/terraform
+            - terraform init
+            - terraform apply -auto-approve tfplan
+
+definitions:
+  services:
+    docker:
+      memory: 2048
