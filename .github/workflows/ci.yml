@@ -10,10 +10,32 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build and start services
         run: docker compose up -d --build
+      - name: Wait for lake-api health
+        run: |
+          for i in {1..30}; do
+            status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' floodwatch-lake-api 2>/dev/null || echo starting)"
+            echo "lake-api health: $status"
+            if [ "$status" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "lake-api did not become healthy in time"
+          docker compose ps
+          docker compose logs lake-api
+          exit 1
       - name: Test worker
         run: make test
       - name: Test api
         run: make test-api
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs lake-api lake-worker
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
