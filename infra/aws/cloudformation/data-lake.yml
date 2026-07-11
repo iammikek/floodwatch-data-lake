@@ -1,0 +1,361 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Flood Watch Data Lake stack (S3 + CloudFront + App Runner + ECS scheduled worker)
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Prefix used for resource naming.
+    Default: floodwatch-data-lake
+
+  ApiImage:
+    Type: String
+    Description: ECR image identifier for lake-api (account.dkr.ecr.region.amazonaws.com/repo:tag)
+
+  WorkerImage:
+    Type: String
+    Description: ECR image identifier for lake-worker (account.dkr.ecr.region.amazonaws.com/repo:tag)
+
+  CdnDomainName:
+    Type: String
+    Description: Optional custom domain for CloudFront (e.g. cdn.example.com). Leave blank to use the default CloudFront domain.
+    Default: ""
+
+  CdnAcmCertificateArn:
+    Type: String
+    Description: Optional ACM certificate ARN for CdnDomainName (CloudFront requires ACM in us-east-1). Leave blank to use the default CloudFront certificate.
+    Default: ""
+
+  PolygonsTtlSeconds:
+    Type: Number
+    Default: 300
+
+  WarningsTtlSeconds:
+    Type: Number
+    Default: 120
+
+  MeasurementsTtlSeconds:
+    Type: Number
+    Default: 60
+
+  RateLimitLimit:
+    Type: Number
+    Default: 60
+
+  RateLimitWindowSeconds:
+    Type: Number
+    Default: 60
+
+  WorkerSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets used by the scheduled ECS task.
+
+  WorkerSecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups used by the scheduled ECS task.
+
+  WorkerAssignPublicIp:
+    Type: String
+    AllowedValues: ["ENABLED", "DISABLED"]
+    Default: "ENABLED"
+
+  EnableWorkerSchedule:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+
+  WorkerScheduleExpression:
+    Type: String
+    Default: rate(1 day)
+
+  WorkerCommand:
+    Type: String
+    Default: python -m ingestion.cli backfill-ea-region --region SOM --parameters level,flow --exclude-qualifiers "Tidal Level" --from 2026-02 --to 2026-03 --resume
+
+Conditions:
+  UseCustomCdnDomain: !And
+    - !Not [!Equals [!Ref CdnDomainName, ""]]
+    - !Not [!Equals [!Ref CdnAcmCertificateArn, ""]]
+  CreateWorkerSchedule: !Equals [!Ref EnableWorkerSchedule, "true"]
+
+Resources:
+  CuratedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-${AWS::AccountId}-${AWS::Region}-curated"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-${AWS::AccountId}-${AWS::Region}-raw"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  CuratedOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${ProjectName}-curated-oac"
+        Description: !Sub "${ProjectName} curated S3 OAC"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CdnDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "${ProjectName} curated CDN"
+        PriceClass: PriceClass_100
+        Aliases: !If [UseCustomCdnDomain, [!Ref CdnDomainName], !Ref AWS::NoValue]
+        Origins:
+          - Id: curated-s3
+            DomainName: !GetAtt CuratedBucket.RegionalDomainName
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref CuratedOac
+        DefaultCacheBehavior:
+          TargetOriginId: curated-s3
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: ["GET", "HEAD", "OPTIONS"]
+          CachedMethods: ["GET", "HEAD", "OPTIONS"]
+          Compress: true
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: none
+        ViewerCertificate: !If
+          - UseCustomCdnDomain
+          - AcmCertificateArn: !Ref CdnAcmCertificateArn
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          - CloudFrontDefaultCertificate: true
+
+  CuratedBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CuratedBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action:
+              - s3:GetObject
+            Resource: !Sub "${CuratedBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CdnDistribution}"
+
+  ApiEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-api"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  WorkerEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-worker"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-apprunner-ecr"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  ApiService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Sub "${ProjectName}-api"
+      SourceConfiguration:
+        AutoDeploymentsEnabled: true
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerEcrAccessRole.Arn
+        ImageRepository:
+          ImageIdentifier: !Ref ApiImage
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: "8000"
+            RuntimeEnvironmentVariables:
+              REMOTE_BASE_URL: !Sub "https://${CdnDistribution.DomainName}/ea"
+              POLYGONS_TTL: !Ref PolygonsTtlSeconds
+              WARNINGS_TTL: !Ref WarningsTtlSeconds
+              MEASUREMENTS_TTL: !Ref MeasurementsTtlSeconds
+              RL_LIMIT: !Ref RateLimitLimit
+              RL_WINDOW_S: !Ref RateLimitWindowSeconds
+              PORT: "8000"
+            StartCommand: !Sub "bash -lc '/app/scripts/start-api.sh'"
+      HealthCheckConfiguration:
+        Path: /healthz
+        Protocol: HTTP
+        Interval: 5
+        Timeout: 2
+        HealthyThreshold: 1
+        UnhealthyThreshold: 3
+      InstanceConfiguration:
+        Cpu: "1 vCPU"
+        Memory: "2 GB"
+
+  WorkerCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-cluster"
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}-worker"
+      RetentionInDays: 14
+
+  WorkerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-ecs-exec"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  WorkerTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-ecs-task"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ProjectName}-worker-s3"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt CuratedBucket.Arn
+                  - !Sub "${CuratedBucket.Arn}/*"
+                  - !GetAtt RawBucket.Arn
+                  - !Sub "${RawBucket.Arn}/*"
+
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-worker"
+      RequiresCompatibilities: ["FARGATE"]
+      Cpu: "1024"
+      Memory: "2048"
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt WorkerExecutionRole.Arn
+      TaskRoleArn: !GetAtt WorkerTaskRole.Arn
+      ContainerDefinitions:
+        - Name: worker
+          Image: !Ref WorkerImage
+          Essential: true
+          Command:
+            - bash
+            - -lc
+            - !Ref WorkerCommand
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  EventsRunTaskRole:
+    Type: AWS::IAM::Role
+    Condition: CreateWorkerSchedule
+    Properties:
+      RoleName: !Sub "${ProjectName}-events-run-task"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ProjectName}-events-run-task"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                Resource:
+                  - !Ref WorkerTaskDefinition
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt WorkerExecutionRole.Arn
+                  - !GetAtt WorkerTaskRole.Arn
+
+  WorkerScheduleRule:
+    Type: AWS::Events::Rule
+    Condition: CreateWorkerSchedule
+    Properties:
+      Name: !Sub "${ProjectName}-worker-schedule"
+      ScheduleExpression: !Ref WorkerScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt WorkerCluster.Arn
+          Id: ecs-run-task
+          RoleArn: !GetAtt EventsRunTaskRole.Arn
+          EcsParameters:
+            TaskDefinitionArn: !Ref WorkerTaskDefinition
+            TaskCount: 1
+            LaunchType: FARGATE
+            NetworkConfiguration:
+              AwsVpcConfiguration:
+                AssignPublicIp: !Ref WorkerAssignPublicIp
+                Subnets: !Ref WorkerSubnetIds
+                SecurityGroups: !Ref WorkerSecurityGroupIds
+
+Outputs:
+  CuratedBucketName:
+    Value: !Ref CuratedBucket
+  RawBucketName:
+    Value: !Ref RawBucket
+  CloudFrontDomainName:
+    Value: !GetAtt CdnDistribution.DomainName
+  ApiServiceUrl:
+    Value: !GetAtt ApiService.ServiceUrl
