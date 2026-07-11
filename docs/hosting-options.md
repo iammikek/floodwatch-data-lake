@@ -83,6 +83,38 @@
     - `MEASUREMENTS_TTL=30`
     - `RL_LIMIT=3`
     - `RL_WINDOW_S=60`
+  - Concrete Checklist
+    - Backfill only the useful window
+      - Start with the last 12 months for Somerset:
+        - `FROM=2025-07 TO=2026-07 REGION=SOM ./scripts/run-collector.sh`
+      - If the app proves value, extend to 24 months later rather than starting larger
+    - Upload these Somerset curated files to remote storage under `ea/`
+      - `SOM_fz2_3_normalized.geojson`
+      - `SOM_defended_1in100_1in200_simplified.geojson`
+      - `SOM_undefended_1in100_1in200_simplified.geojson`
+      - `SOM_defended_1in1000_simplified.geojson`
+      - `SOM_undefended_1in1000_simplified.geojson`
+    - Upload these measurement-support files if enabling `/v1/measurements`
+      - `data/raw/ea/readings/**` for the selected months only
+      - latest `data/raw/ea/stations/**`
+      - latest `data/raw/ea/measures/**`
+    - Configure Railway variables
+      - `REMOTE_BASE_URL=https://cdn.yourdomain`
+      - `POLYGONS_TTL=300`
+      - `WARNINGS_TTL=30`
+      - `MEASUREMENTS_TTL=30`
+      - `RL_LIMIT=3`
+      - `RL_WINDOW_S=60`
+    - Set Railway start command
+      - `./scripts/start-api.sh`
+    - Set Railway health check
+      - `/healthz`
+    - Validate the POC endpoints after deploy
+      - `/healthz`
+      - `/v1/warnings?region=SOM&min_severity=3`
+      - `/v1/polygons?dataset=flood_zones&region=SOM&format=normalized&inline=true`
+      - `/v1/polygons/tiles/flood_zones/10/511/340?region=SOM&format=normalized`
+      - `/v1/measurements?...` only after readings and discovery snapshots are uploaded
 
 - Option B: Single VM (Hetzner/DigitalOcean) Running Docker Compose
   - Setup
