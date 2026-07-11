@@ -42,6 +42,48 @@
     - scripts/start-api.sh uses ${PORT:-8000} to match Railway’s assigned port
     - Keep CDN in front of R2 for zero egress and caching
 
+- Railway POC Deployment Profile (Recommended First Step)
+  - Goal
+    - Prove value to Flood Watch without carrying a large hosting bill or a complex platform setup
+  - Scope
+    - Region: Somerset only (`SOM`)
+    - Endpoints enabled:
+      - `/v1/warnings`
+      - `/v1/polygons`
+      - `/v1/polygons/tiles`
+      - `/v1/measurements` with a limited historical window
+    - Measurements history:
+      - Start with 12 months
+      - Extend to 24 months only if the app clearly benefits from it
+  - Data to Host
+    - Required
+      - Simplified curated polygons under `data/curated/ea`
+      - Current/live warnings (no large local dataset required)
+    - Optional
+      - Readings under `data/raw/ea/readings`
+      - Discovery snapshots under `data/raw/ea/stations` and `data/raw/ea/measures`
+  - Recommended Layout
+    - Railway hosts `lake-api`
+    - Remote object storage/CDN hosts static datasets
+    - `REMOTE_BASE_URL` points to the remote dataset base
+    - Refresh datasets manually or from CI when needed; do not start with scheduled production ingestion
+  - Practical Footprint
+    - Polygon-only POC: ~2 GB class footprint
+    - Somerset + 12 months of measurements: ~2.5–4.0 GB class footprint
+    - Somerset + 24 months of measurements: ~3–5 GB class footprint
+    - Safe disk budget if any data is kept locally: 5–10 GB
+  - Why this is the right first cut
+    - Gives Flood Watch the most visible value first: maps, warnings, and recent measurement context
+    - Keeps Railway focused on compute while remote storage handles large files
+    - Avoids early AWS complexity, large history backfills, and persistent-volume costs
+  - Suggested Environment
+    - `REMOTE_BASE_URL=https://cdn.yourdomain`
+    - `POLYGONS_TTL=300`
+    - `WARNINGS_TTL=30`
+    - `MEASUREMENTS_TTL=30`
+    - `RL_LIMIT=3`
+    - `RL_WINDOW_S=60`
+
 - Option B: Single VM (Hetzner/DigitalOcean) Running Docker Compose
   - Setup
     - Provision a small VM (e.g., Hetzner CX11 or DO Basic) and attach a 20–30 GB volume

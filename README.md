@@ -139,6 +139,37 @@ flowchart TD
   - 5 regions, 2,000 measures, 10 years → hydrology ≈ 48 GB; polygons ≈ 0.3–1.6 GB; discovery ≈ 0.2–0.5 GB; total ≈ 49–51 GB
   - API‑only with curated polygons → ~0.35–1.7 GB
 
+- Remote Service Footprint
+
+  | Endpoint / Capability | Required Data | Current Size | Can Omit? |
+  | --- | --- | ---: | --- |
+  | `/v1/polygons` | `data/curated/ea/**` | ~1.8 GB | No, if serving polygons |
+  | `/v1/polygons/tiles` | `data/curated/ea/**` | ~1.8 GB | No, if serving tiles |
+  | `/v1/measurements` | `data/raw/ea/readings/**` plus `data/raw/ea/stations/**` and `data/raw/ea/measures/**` | ~13 MB for readings currently; discovery snapshots are additional when present | Yes, if you do not need measurements |
+  | `/v1/warnings` | No large local dataset required; warnings are fetched/normalized live | Minimal | Yes, if you do not need warnings |
+  | Polygon-only hosted service | App + curated polygons only | ~2 GB class footprint | N/A |
+  | Current full dataset | App + curated polygons + raw readings/discovery | ~3 GB class footprint | N/A |
+
+- Current On-Disk Snapshot
+  - `data`: ~2.9 GB
+  - `data/raw`: ~1.2 GB
+  - `data/curated`: ~1.8 GB
+  - `data/raw/ea/readings`: ~13 MB
+  - `data/curated/ea`: ~1.8 GB
+
+- Useful Dataset Scenarios (Somerset-only guide)
+
+  | Scenario | Assumption | Estimated Total Footprint |
+  | --- | --- | ---: |
+  | Starter useful | 1 region, 12 months, ~500 measures, curated polygons | ~1.5–3.0 GB |
+  | Operational useful | 1 region, 24 months, ~500 measures, curated polygons | ~2.7–4.2 GB |
+  | Strong historical context | 1 region, 5 years, ~500 measures, curated polygons | ~6.3–7.8 GB |
+  | Safer hosted budget | Same as above, plus Docker/log/temp headroom | ~10 GB recommended |
+
+- Practical Recommendation
+  - For a first hosted version, Somerset-only with 2–3 years of measurements plus curated polygons is likely the best balance of usefulness and size.
+  - In practice, this is a roughly 3–5 GB class dataset, with 10 GB disk giving safer operating headroom.
+
 - Control Footprint
   - Scope by region and parameters (level, flow)
   - Limit backfill windows (FROM/TO)
