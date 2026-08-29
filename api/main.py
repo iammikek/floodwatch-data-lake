@@ -15,6 +15,7 @@ from api.deps import require_api_token
 from api.routes.measurements import router as measurements_router
 from api.routes.polygons import router as polygons_router
 from api.routes.warnings import router as warnings_router
+from api.routes.predictions import router as predictions_router
 
 
 app = FastAPI(title="Flood Watch Data Lake API", version="0.1.0")
@@ -22,6 +23,7 @@ _api_deps = [Depends(require_api_token)]
 app.include_router(measurements_router, dependencies=_api_deps)
 app.include_router(polygons_router, dependencies=_api_deps)
 app.include_router(warnings_router, dependencies=_api_deps)
+app.include_router(predictions_router, dependencies=_api_deps)
 
 
 @app.get("/healthz")
