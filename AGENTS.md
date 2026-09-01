@@ -18,8 +18,12 @@ How to Start Collector
 - Prereqs: Docker Desktop installed; running on macOS (Apple Silicon supported).
 - Start worker and run hydrology backfill for a region:
   - FROM=YYYY-MM TO=YYYY-MM REGION=SOM MAX_STATIONS=1 MAX_MEASURES=1 ./scripts/run-collector.sh
+- **Prediction corridor (4 gauges, A361 Muchelney):**
+  - FROM=2022-01 TO=YYYY-MM ./scripts/run-corridor-backfill.sh
+  - Docs: `docs/prediction-corridor-backfill.md`
 - Alternative via Makefile:
   - FROM=YYYY-MM TO=YYYY-MM REGION=SOM make collector
+  - FROM=2022-01 TO=YYYY-MM make corridor-backfill
 
 Saved Data Format
 - Path pattern: data/raw/ea/readings/{measure_id}/{YYYY}-{MM}.ndjson.gz

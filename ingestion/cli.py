@@ -5,6 +5,13 @@ import gzip
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 from ingestion.regions import REGION_BBOX, REGION_NEAR
+from ingestion.corridor_backfill import (
+    assert_coverage,
+    corridor_measure_ids,
+    coverage_report,
+    default_to_month,
+)
+from api.config.corridors import list_corridor_ids
 try:
     from ingestion.clients.ea import EAClient  # type: ignore
 except Exception:
@@ -117,6 +124,74 @@ def _measure_notation(m: Dict[str, Any]) -> str:
 def _station_id(s: Dict[str, Any]) -> str:
     return s.get("notation") or s.get("stationReference") or s.get("@id", "")
 
+def _backfill_measure_months(
+    client: Any,
+    measure_id: str,
+    from_month: str,
+    to_month: str,
+    *,
+    resume: bool = False,
+) -> None:
+    if resume:
+        sy, sm = map(int, from_month.split("-"))
+        ey, em = map(int, to_month.split("-"))
+        y, mo = sy, sm
+        while True:
+            out_path = f"data/raw/ea/readings/{measure_id}/{y:04d}-{mo:02d}.ndjson.gz"
+            if not os.path.exists(out_path):
+                sdt = datetime(y, mo, 1, tzinfo=timezone.utc)
+                edt = next_month(y, mo)
+                since = sdt.strftime("%Y-%m-%d")
+                until = (edt - timedelta(days=1)).strftime("%Y-%m-%d")
+                items: List[Dict[str, Any]] = client.get_readings(
+                    measure_id, since=since, until=until, sorted_flag=True
+                )
+                write_ndjson_gz(out_path, items)
+            if y == ey and mo == em:
+                break
+            if mo == 12:
+                y += 1
+                mo = 1
+            else:
+                mo += 1
+        return
+
+    rng_args = argparse.Namespace(measure=measure_id, from_month=from_month, to_month=to_month)
+    cmd_fetch_ea_readings_range(rng_args)
+
+
+def cmd_backfill_ea_corridor(args: argparse.Namespace) -> None:
+    """Backfill only the EA measures used by a prediction corridor."""
+    client = EAClient()
+    measure_ids = corridor_measure_ids(args.corridor)
+    if not measure_ids:
+        raise SystemExit(f"No measures configured for corridor {args.corridor}")
+
+    from_month = args.from_month or f"{datetime.now(timezone.utc).year - 2:04d}-01"
+    to_month = args.to_month or default_to_month()
+
+    for measure_id in measure_ids:
+        print(f"backfill corridor={args.corridor} measure={measure_id} from={from_month} to={to_month}")
+        _backfill_measure_months(client, measure_id, from_month, to_month, resume=bool(args.resume))
+
+    report = coverage_report(args.corridor, from_month, to_month)
+    print(json.dumps(report, indent=2))
+
+
+def cmd_check_corridor_coverage(args: argparse.Namespace) -> None:
+    from_month = args.from_month
+    to_month = args.to_month or default_to_month()
+    if args.min_months is not None:
+        assert_coverage(args.corridor, from_month, to_month, args.min_months)
+        print(f"OK corridor={args.corridor} min_months={args.min_months}")
+        return
+
+    report = coverage_report(args.corridor, from_month, to_month)
+    print(json.dumps(report, indent=2))
+    if args.require_complete and not report["complete"]:
+        raise SystemExit(1)
+
+
 def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
     client = EAClient()
     near = REGION_NEAR.get(args.region)
@@ -172,25 +247,13 @@ def cmd_backfill_ea_region(args: argparse.Namespace) -> None:
                 break
             measure_id = _measure_notation(m)
             if getattr(args, "resume", False):
-                sy, sm = map(int, from_month.split("-"))
-                ey, em = map(int, to_month.split("-"))
-                y, mo = sy, sm
-                while True:
-                    out_path = f"data/raw/ea/readings/{measure_id}/{y:04d}-{mo:02d}.ndjson.gz"
-                    if not os.path.exists(out_path):
-                        sdt = datetime(y, mo, 1, tzinfo=timezone.utc)
-                        edt = next_month(y, mo)
-                        since = sdt.strftime("%Y-%m-%d")
-                        until = (edt - timedelta(days=1)).strftime("%Y-%m-%d")
-                        items: List[Dict[str, Any]] = client.get_readings(measure_id, since=since, until=until, sorted_flag=True)
-                        write_ndjson_gz(out_path, items)
-                    if y == ey and mo == em:
-                        break
-                    if mo == 12:
-                        y += 1
-                        mo = 1
-                    else:
-                        mo += 1
+                _backfill_measure_months(
+                    client,
+                    measure_id,
+                    from_month,
+                    to_month,
+                    resume=True,
+                )
             else:
                 rng_args = argparse.Namespace(measure=measure_id, from_month=from_month, to_month=to_month)
                 cmd_fetch_ea_readings_range(rng_args)
@@ -486,6 +549,35 @@ def build_parser() -> argparse.ArgumentParser:
     pbr.add_argument("--exclude-qualifiers", default="Tidal Level", help="comma-separated measure qualifiers to exclude (e.g. Tidal Level)")
     pbr.add_argument("--resume", action="store_true", help="skip existing monthly files to continue where left off")
     pbr.set_defaults(func=cmd_backfill_ea_region)
+
+    pbc = sub.add_parser(
+        "backfill-ea-corridor",
+        help="backfill EA readings for prediction corridor gauges only",
+    )
+    pbc.add_argument("--corridor", required=True, choices=list_corridor_ids())
+    pbc.add_argument("--from", dest="from_month", help="YYYY-MM; default 2 years ago January")
+    pbc.add_argument("--to", dest="to_month", help="YYYY-MM; default current month")
+    pbc.add_argument("--resume", action="store_true", help="skip existing monthly files")
+    pbc.set_defaults(func=cmd_backfill_ea_corridor)
+
+    pcc = sub.add_parser(
+        "check-corridor-coverage",
+        help="report or enforce monthly file coverage for a prediction corridor",
+    )
+    pcc.add_argument("--corridor", required=True, choices=list_corridor_ids())
+    pcc.add_argument("--from", dest="from_month", required=True, help="YYYY-MM")
+    pcc.add_argument("--to", dest="to_month", help="YYYY-MM; default current month")
+    pcc.add_argument(
+        "--min-months",
+        type=int,
+        help="require each measure to have at least N monthly files (exit 1 if not)",
+    )
+    pcc.add_argument(
+        "--require-complete",
+        action="store_true",
+        help="exit 1 unless every month in range has a non-empty file for each measure",
+    )
+    pcc.set_defaults(func=cmd_check_corridor_coverage)
 
     pfa = sub.add_parser("fetch-ea-flood-areas-region")
     pfa.add_argument("--region", required=True, choices=list(REGION_BBOX.keys()))

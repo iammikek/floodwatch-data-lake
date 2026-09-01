@@ -20,6 +20,16 @@ restart-api:
 collector:
 	./scripts/run-collector.sh
 
+corridor-backfill:
+	./scripts/run-corridor-backfill.sh
+
+corridor-coverage:
+	docker compose exec -T lake-worker python -m ingestion.cli check-corridor-coverage \
+	  --corridor $${CORRIDOR:-a361-muchelney} \
+	  --from $${FROM:-2022-01} \
+	  --to $${TO:-} \
+	  --min-months $${MIN_MONTHS:-24}
+
 clean-data:
 	@echo "Removing zero-size archives and empty directories under data/raw/ea/readings..."
 	@find data/raw/ea/readings -type f -name '*.ndjson.gz' -size 0 -print -delete || true
