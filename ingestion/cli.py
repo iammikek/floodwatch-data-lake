@@ -143,10 +143,16 @@ def _backfill_measure_months(
                 edt = next_month(y, mo)
                 since = sdt.strftime("%Y-%m-%d")
                 until = (edt - timedelta(days=1)).strftime("%Y-%m-%d")
-                items: List[Dict[str, Any]] = client.get_readings(
-                    measure_id, since=since, until=until, sorted_flag=True
-                )
-                write_ndjson_gz(out_path, items)
+                try:
+                    items: List[Dict[str, Any]] = client.get_readings(
+                        measure_id, since=since, until=until, sorted_flag=True
+                    )
+                    write_ndjson_gz(out_path, items)
+                except Exception as exc:
+                    print(
+                        f"WARN skip {measure_id} {y:04d}-{mo:02d}: {exc}",
+                        flush=True,
+                    )
             if y == ey and mo == em:
                 break
             if mo == 12:

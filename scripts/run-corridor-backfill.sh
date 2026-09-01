@@ -8,8 +8,8 @@ CORRIDOR="${CORRIDOR:-a361-muchelney}"
 FROM="${FROM:-}"
 TO="${TO:-}"
 RESUME="${RESUME:-1}"
-TOTAL_TIMEOUT="${TOTAL_TIMEOUT:-30}"
-RETRIES="${RETRIES:-5}"
+TOTAL_TIMEOUT="${TOTAL_TIMEOUT:-60}"
+RETRIES="${RETRIES:-8}"
 
 if [[ -z "${FROM}" ]]; then
   FROM="$(python - <<'PY'
