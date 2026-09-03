@@ -46,9 +46,16 @@ class PredictCorridorTests(unittest.TestCase):
         now = start + timedelta(hours=100)
 
         def loader(measure_id, from_, to, aggregate="hour"):
-            # Rising series for all measures
-            base = [1.0 + i * 0.02 for i in range(90)]
-            return _pts(base, start)
+            analogues = {
+                "52119-level-stage-i-15_min-mASD": [1.05, 1.1, 1.2, 1.3, 1.42, 1.55],
+                "52153-level-stage-i-15_min-mASD": [0.92, 0.96, 1.02, 1.08, 1.16, 1.24],
+                "52245-level-stage-i-15_min-m": [0.84, 0.88, 0.95, 1.02, 1.1, 1.18],
+                "52230-level-stage-i-15_min-m": [0.75, 0.79, 0.84, 0.9, 0.97, 1.05],
+            }
+            outcome_tail = [1.8, 1.92, 2.05, 2.2, 2.3, 2.42]
+            tail = analogues[measure_id]
+            history = [1.0] * 48 + tail + outcome_tail + [0.95] * 24 + tail
+            return _pts(history, start)
 
         doc = predict_corridor(
             "a361-muchelney",
@@ -56,12 +63,65 @@ class PredictCorridorTests(unittest.TestCase):
             now=now,
             series_loader=loader,
         )
-        self.assertEqual(doc["schema"], "floodwatch.prediction.v0")
+        self.assertEqual(doc["schema"], "floodwatch.prediction.v1")
         self.assertEqual(doc["corridor"]["id"], "a361-muchelney")
         self.assertIn(doc["prediction"]["verdict"], ("watch", "at_risk", "clear"))
         self.assertTrue(doc["drivers"])
         self.assertIn("gaugeSeries", doc["observables"])
         self.assertIn("gauge-gaw-bridge", doc["observables"]["gaugeSeries"])
+        self.assertEqual(doc["method"]["name"], "historic_analogue_v1")
+        self.assertTrue(any(d["type"] == "analogue_consensus" for d in doc["drivers"]))
+
+    def test_predict_corridor_clear_when_no_good_matches(self):
+        start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        now = start + timedelta(hours=100)
+
+        def loader(measure_id, from_, to, aggregate="hour"):
+            history = [1.0] * 96 + [1.6, 1.72, 1.84, 1.95, 2.08, 2.2, 2.28, 2.34]
+            return _pts(history, start)
+
+        doc = predict_corridor("a361-muchelney", history_days=30, now=now, series_loader=loader)
+        self.assertEqual(doc["prediction"]["verdict"], "clear")
+        self.assertEqual(doc["prediction"]["timeToImpactHours"], None)
+        self.assertEqual(doc["dispatch"]["safeToPass"], True)
+
+    def test_predict_corridor_returns_analogue_drivers_when_matches_exist(self):
+        start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        now = start + timedelta(hours=100)
+
+        def loader(measure_id, from_, to, aggregate="hour"):
+            current_patterns = {
+                "52119-level-stage-i-15_min-mASD": [1.0] * 18 + [1.02, 1.05, 1.1, 1.16, 1.22, 1.28],
+                "52153-level-stage-i-15_min-mASD": [0.92] * 18 + [0.95, 0.98, 1.01, 1.05, 1.08, 1.11],
+                "52245-level-stage-i-15_min-m": [0.85] * 18 + [0.87, 0.9, 0.94, 0.98, 1.01, 1.04],
+                "52230-level-stage-i-15_min-m": [0.75] * 18 + [0.77, 0.8, 0.83, 0.86, 0.89, 0.92],
+            }
+            if measure_id == "52119-level-stage-i-15_min-mASD":
+                history = (
+                    [1.0] * 36
+                    + current_patterns[measure_id]
+                    + [1.36, 1.4, 1.44, 1.47, 1.49, 1.5]
+                    + [0.98] * 18
+                    + current_patterns[measure_id]
+                    + [1.62, 1.74, 1.88, 1.96, 2.04, 2.12]
+                    + [0.96] * 18
+                    + current_patterns[measure_id]
+                )
+            else:
+                history = (
+                    [0.9] * 36
+                    + current_patterns[measure_id]
+                    + [1.0] * 18
+                    + current_patterns[measure_id]
+                    + [1.12] * 18
+                    + current_patterns[measure_id]
+                )
+            return _pts(history, start)
+
+        doc = predict_corridor("a361-muchelney", history_days=30, now=now, series_loader=loader)
+        self.assertIn(doc["prediction"]["verdict"], ("watch", "at_risk"))
+        self.assertFalse(doc["dispatch"]["safeToPass"])
+        self.assertTrue(any(d["type"] == "historic_analogue" for d in doc["drivers"]))
 
     def test_unknown_corridor(self):
         with self.assertRaises(KeyError):

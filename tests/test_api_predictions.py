@@ -25,7 +25,7 @@ class PredictionsApiTests(unittest.TestCase):
     def test_prediction_ok_with_stubbed_service(self):
         def fake_predict(corridor, history_days=120):
             return {
-                "schema": "floodwatch.prediction.v0",
+                "schema": "floodwatch.prediction.v1",
                 "corridor": {"id": corridor, "label": "test"},
                 "prediction": {
                     "verdict": "clear",
@@ -36,10 +36,19 @@ class PredictionsApiTests(unittest.TestCase):
                     "confidenceLabel": "Medium",
                     "summary": "stub",
                 },
-                "drivers": [],
+                "drivers": [
+                    {
+                        "type": "historic_analogue",
+                        "ref": "2020-02-16T00:00:00Z",
+                        "label": "Storm Dennis analogue",
+                        "similarity": 0.88,
+                        "outcome": "impact",
+                        "timeToImpactHours": 6,
+                    }
+                ],
                 "affectedAreas": [],
                 "dispatch": {"implication": "ok", "safeToPass": True},
-                "method": {"name": "stub", "inputs": [], "notes": ""},
+                "method": {"name": "historic_analogue_v1", "inputs": [], "notes": ""},
                 "observables": {"gaugeSeries": {}},
             }
 
@@ -51,8 +60,9 @@ class PredictionsApiTests(unittest.TestCase):
                 params={"corridor": "a361-muchelney"},
             )
             self.assertEqual(r.status_code, 200)
-            self.assertEqual(r.json()["schema"], "floodwatch.prediction.v0")
+            self.assertEqual(r.json()["schema"], "floodwatch.prediction.v1")
             self.assertEqual(r.json()["prediction"]["verdict"], "clear")
+            self.assertEqual(r.json()["method"]["name"], "historic_analogue_v1")
         finally:
             predictions_route.predict_corridor = original
 

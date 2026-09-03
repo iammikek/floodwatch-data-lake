@@ -1,8 +1,9 @@
-"""Historic stage trajectory → floodwatch.prediction.v0 (no rainfall / depth yet)."""
+"""Historic multi-gauge analogue matching → floodwatch.prediction.v1."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from math import sqrt
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from api.config.corridors import get_corridor, list_corridor_ids
@@ -176,6 +177,259 @@ def _compact_hour_values(pts: Sequence[SeriesPoint], n: int = 12) -> List[float]
     return [round(p.value, 3) for p in tail]
 
 
+def _percentile_rank(values: Sequence[float], value: float) -> float:
+    if not values:
+        return 0.0
+    below = sum(1 for v in values if v <= value)
+    return round(100.0 * below / len(values), 2)
+
+
+def _window_end_candidates(
+    series_by_measure: Dict[str, Sequence[SeriesPoint]],
+    measure_ids: Sequence[str],
+    cutoff: datetime,
+    horizon_hours: int,
+) -> List[datetime]:
+    shared: Optional[set[datetime]] = None
+    for measure_id in measure_ids:
+        pts = series_by_measure.get(measure_id, [])
+        times = {
+            p.t
+            for p in pts
+            if p.t <= cutoff - timedelta(hours=horizon_hours)
+        }
+        shared = times if shared is None else shared & times
+    if not shared:
+        return []
+    return sorted(t for t in shared if t >= cutoff - timedelta(days=3650))  # stable order
+
+
+def _window_points(pts: Sequence[SeriesPoint], end: datetime, window_hours: int) -> List[SeriesPoint]:
+    start = end - timedelta(hours=window_hours - 1)
+    window = [p for p in pts if start <= p.t <= end]
+    return window if len(window) == window_hours else []
+
+
+def _values_by_measure(
+    series_by_measure: Dict[str, Sequence[SeriesPoint]],
+    measure_ids: Sequence[str],
+) -> Dict[str, List[float]]:
+    return {measure_id: [p.value for p in series_by_measure.get(measure_id, [])] for measure_id in measure_ids}
+
+
+def _fingerprint_for_window(
+    series_by_measure: Dict[str, Sequence[SeriesPoint]],
+    values_by_measure: Dict[str, Sequence[float]],
+    measure_ids: Sequence[str],
+    end: datetime,
+    window_hours: int,
+) -> Optional[List[float]]:
+    vector: List[float] = []
+    for measure_id in measure_ids:
+        pts = _window_points(series_by_measure.get(measure_id, []), end, window_hours)
+        if len(pts) != window_hours:
+            return None
+        vals = values_by_measure.get(measure_id, [])
+        vector.extend(_percentile_rank(vals, p.value) / 100.0 for p in pts[-12:])
+        base = pts[0].value
+        hist_span = max(vals) - min(vals) if vals else 0.0
+        scale = hist_span if hist_span > 0.05 else 0.05
+        vector.extend(round((p.value - base) / scale, 4) for p in pts[-12:])
+        slope = _slope_per_hour(pts[-6:])
+        vector.append(0.0 if slope is None else round(slope, 4))
+    return vector
+
+
+def _cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
+    if len(a) != len(b) or not a:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sqrt(sum(x * x for x in a))
+    norm_b = sqrt(sum(y * y for y in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _outcome_for_analogue(
+    primary_series: Sequence[SeriesPoint],
+    end: datetime,
+    *,
+    horizon_hours: int,
+    impact_delta: float,
+    watch_delta: float,
+) -> Tuple[str, Optional[float]]:
+    analogue_window = _window_points(primary_series, end, 24)
+    if not analogue_window:
+        return ("clear", None)
+    baseline = analogue_window[-1].value
+    history_values = sorted(p.value for p in primary_series if p.t <= end)
+    p90 = _percentile(history_values, 90) if history_values else baseline
+    p95 = _percentile(history_values, 95) if history_values else baseline
+    future = [
+        p for p in primary_series
+        if end < p.t <= end + timedelta(hours=horizon_hours)
+    ]
+    first_watch = None
+    for p in future:
+        rise = p.value - baseline
+        hours = (p.t - end).total_seconds() / 3600.0
+        if p.value >= p95 or rise >= impact_delta:
+            return ("impact", round(hours, 1))
+        if first_watch is None and (p.value >= p90 or rise >= watch_delta):
+            first_watch = round(hours, 1)
+    if first_watch is not None:
+        return ("watch", first_watch)
+    return ("clear", None)
+
+
+def _weighted_median_time(rows: Sequence[Dict[str, Any]]) -> Optional[float]:
+    values = sorted(
+        [(float(r["timeToImpactHours"]), float(r["similarity"])) for r in rows if r.get("timeToImpactHours") is not None],
+        key=lambda x: x[0],
+    )
+    if not values:
+        return None
+    total = sum(weight for _, weight in values)
+    seen = 0.0
+    for value, weight in values:
+        seen += weight
+        if seen >= total / 2.0:
+            return round(value, 1)
+    return round(values[-1][0], 1)
+
+
+def _impact_window(now: datetime, hours: Optional[float]) -> Optional[Dict[str, str]]:
+    if hours is None:
+        return None
+    impact_from = now + timedelta(hours=max(0.0, hours * 0.7))
+    impact_to = now + timedelta(hours=hours + 3)
+    return {
+        "from": impact_from.isoformat().replace("+00:00", "Z"),
+        "to": impact_to.isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _confidence_label(confidence: float) -> str:
+    if confidence >= 0.7:
+        return "High"
+    if confidence >= 0.45:
+        return "Medium"
+    return "Low"
+
+
+def _consensus_verdict(
+    analogue_rows: Sequence[Dict[str, Any]],
+    corridor_label: str,
+) -> Tuple[str, str, Optional[float], float, str, str]:
+    if not analogue_rows:
+        return (
+            "clear",
+            "No predicted impact in window",
+            None,
+            0.35,
+            "Current multi-gauge shape does not closely match disruptive historic EA windows.",
+            "No trend-based hold — continue live-warning checks.",
+        )
+
+    total = len(analogue_rows)
+    impacts = [r for r in analogue_rows if r["outcome"] == "impact"]
+    watches = [r for r in analogue_rows if r["outcome"] == "watch"]
+    impact_rate = len(impacts) / total
+    watch_or_impact_rate = (len(impacts) + len(watches)) / total
+    clear_rate = sum(1 for r in analogue_rows if r["outcome"] == "clear") / total
+
+    if impact_rate >= 0.6:
+        tti = _weighted_median_time(impacts)
+        confidence = min(0.92, 0.5 + 0.4 * impact_rate)
+        summary = (
+            f"{len(impacts)} of {total} close historic matches reached disruptive levels "
+            f"within the next day on {corridor_label.lower()}."
+        )
+        implication = (
+            f"Hold non-urgent runs on {corridor_label} "
+            f"within ~{int(tti) if tti is not None else 6}h if levels keep rising."
+        )
+        return ("at_risk", "At risk within window", tti, round(confidence, 2), summary, implication)
+
+    if impact_rate >= 0.4 or watch_or_impact_rate >= 0.5:
+        mixed = impacts + watches
+        tti = _weighted_median_time(mixed)
+        confidence = min(0.92, 0.35 + 0.3 * watch_or_impact_rate)
+        summary = (
+            f"Historic EA matches are mixed: {len(impacts)} impact analogue(s), "
+            f"{len(watches)} watch analogue(s), {total - len(impacts) - len(watches)} clear."
+        )
+        implication = f"Increase monitoring on {corridor_label}; no hard hold yet."
+        return ("watch", "Watch — mixed historic analogues", tti, round(confidence, 2), summary, implication)
+
+    confidence = min(0.92, 0.5 + 0.2 * clear_rate)
+    summary = (
+        f"{int(clear_rate * total)} of {total} close historic matches stayed below disruptive thresholds "
+        f"through the next day."
+    )
+    implication = "No trend-based hold — continue live-warning checks."
+    return ("clear", "No predicted impact in window", None, round(confidence, 2), summary, implication)
+
+
+def _build_analogue_rows(
+    corridor: Dict[str, Any],
+    series_by_measure: Dict[str, Sequence[SeriesPoint]],
+    now: datetime,
+    *,
+    window_hours: int,
+    min_gap_hours: int,
+    horizon_hours: int,
+    min_similarity: float,
+    top_k: int,
+) -> List[Dict[str, Any]]:
+    gauges = corridor["gauges"]
+    measure_ids = [g["measure_id"] for g in gauges]
+    values_by_measure = _values_by_measure(series_by_measure, measure_ids)
+    latest_times = [
+        series_by_measure[measure_id][-1].t
+        for measure_id in measure_ids
+        if series_by_measure.get(measure_id)
+    ]
+    if len(latest_times) != len(measure_ids):
+        return []
+    current_end = min(latest_times)
+    current_fp = _fingerprint_for_window(series_by_measure, values_by_measure, measure_ids, current_end, window_hours)
+    if not current_fp:
+        return []
+
+    primary_series = series_by_measure[measure_ids[0]]
+    candidate_cutoff = current_end - timedelta(hours=min_gap_hours)
+    candidates = _window_end_candidates(series_by_measure, measure_ids, candidate_cutoff, horizon_hours)
+    rows: List[Dict[str, Any]] = []
+    for end in candidates:
+        fp = _fingerprint_for_window(series_by_measure, values_by_measure, measure_ids, end, window_hours)
+        if not fp:
+            continue
+        similarity = round(_cosine_similarity(current_fp, fp), 4)
+        if similarity < min_similarity:
+            continue
+        outcome, tti = _outcome_for_analogue(
+            primary_series,
+            end,
+            horizon_hours=horizon_hours,
+            impact_delta=0.35,
+            watch_delta=0.2,
+        )
+        rows.append(
+            {
+                "type": "historic_analogue",
+                "ref": end.isoformat().replace("+00:00", "Z"),
+                "label": end.strftime("%b %Y analogue"),
+                "similarity": similarity,
+                "outcome": outcome,
+                "timeToImpactHours": tti,
+            }
+        )
+    rows.sort(key=lambda r: r["similarity"], reverse=True)
+    return rows[:top_k]
+
+
 def predict_corridor(
     corridor_id: str,
     *,
@@ -193,10 +447,30 @@ def predict_corridor(
     corridor = get_corridor(corridor_id)
     primary = corridor["primary"]
     hist_from = now - timedelta(days=history_days)
+    gauge_meta = corridor["gauges"]
+    measure_ids = [g["measure_id"] for g in gauge_meta]
 
-    primary_series = series_loader(primary["measure_id"], hist_from, now, "hour")
+    series_by_measure: Dict[str, Sequence[SeriesPoint]] = {
+        measure_id: series_loader(measure_id, hist_from, now, "hour")
+        for measure_id in measure_ids
+    }
+    primary_series = series_by_measure[primary["measure_id"]]
     primary_analysis = analyse_series(primary_series, now=now)
-    verdict, verdict_label, tti, confidence, summary = _verdict_from_primary(primary_analysis)
+
+    analogue_rows = _build_analogue_rows(
+        corridor,
+        series_by_measure,
+        now,
+        window_hours=24,
+        min_gap_hours=24,
+        horizon_hours=24,
+        min_similarity=0.85,
+        top_k=20,
+    )
+    verdict, verdict_label, tti, confidence, summary, implication = _consensus_verdict(
+        analogue_rows,
+        corridor["label"],
+    )
 
     drivers: List[Dict[str, Any]] = [
         {
@@ -215,13 +489,9 @@ def predict_corridor(
 
     for g in corridor["gauges"]:
         mid = g["measure_id"]
-        # Short window for sparkline observables; primary already loaded long.
-        if mid == primary["measure_id"]:
-            pts = primary_series
-            analysis = primary_analysis
-        else:
-            pts = series_loader(mid, now - timedelta(days=14), now, "hour")
-            analysis = analyse_series(pts, now=now)
+        pts = series_by_measure[mid]
+        analysis = primary_analysis if mid == primary["measure_id"] else analyse_series(pts, now=now)
+        if mid != primary["measure_id"]:
             drivers.append(
                 {
                     "type": "gauge_trajectory",
@@ -235,25 +505,22 @@ def predict_corridor(
             )
         gauge_series_out[g["ref"]] = _compact_hour_values(pts, 12)
 
+    drivers.extend(analogue_rows)
     drivers.append(
         {
-            "type": "historic_percentile",
-            "ref": primary["measure_id"],
-            "label": f"{primary['label']} vs mined history",
-            "similarity": round((primary_analysis.get("pct_rank") or 0) / 100.0, 2),
-            "p90": primary_analysis.get("p90"),
-            "p95": primary_analysis.get("p95"),
+            "type": "analogue_consensus",
+            "ref": f"k{len(analogue_rows)}",
+            "label": f"{len(analogue_rows)} matched windows",
+            "impactRate": round(sum(1 for r in analogue_rows if r["outcome"] == "impact") / len(analogue_rows), 2)
+            if analogue_rows
+            else 0.0,
+            "watchRate": round(sum(1 for r in analogue_rows if r["outcome"] == "watch") / len(analogue_rows), 2)
+            if analogue_rows
+            else 0.0,
         }
     )
 
-    impact_window = None
-    if tti is not None:
-        impact_from = now + timedelta(hours=max(0.0, tti * 0.7))
-        impact_to = now + timedelta(hours=tti + 3)
-        impact_window = {
-            "from": impact_from.isoformat().replace("+00:00", "Z"),
-            "to": impact_to.isoformat().replace("+00:00", "Z"),
-        }
+    impact_window = _impact_window(now, tti)
 
     risk_for_areas = "high" if verdict == "at_risk" else ("medium" if verdict == "watch" else "low")
     affected = []
@@ -262,15 +529,6 @@ def predict_corridor(
             affected.append({**area, "risk": risk_for_areas if verdict == "at_risk" else "medium"})
 
     safe = verdict == "clear"
-    if verdict == "at_risk":
-        implication = (
-            f"Hold non-urgent runs on {corridor['label']} "
-            f"within ~{int(tti) if tti is not None else 6}h if levels keep rising."
-        )
-    elif verdict == "watch":
-        implication = f"Increase monitoring on {corridor['label']}; no hard hold yet."
-    else:
-        implication = "No trend-based hold — continue live-warning checks."
 
     series_start = None
     if primary_series:
@@ -278,7 +536,7 @@ def predict_corridor(
         series_start = tail[0].t.isoformat().replace("+00:00", "Z")
 
     return {
-        "schema": "floodwatch.prediction.v0",
+        "schema": "floodwatch.prediction.v1",
         "as_of": now.isoformat().replace("+00:00", "Z"),
         "region": corridor["region"],
         "corridor": {"id": corridor["id"], "label": corridor["label"]},
@@ -288,20 +546,24 @@ def predict_corridor(
             "timeToImpactHours": tti,
             "impactWindow": impact_window,
             "confidence": round(confidence, 2),
-            "confidenceLabel": (
-                "High" if confidence >= 0.7 else "Medium" if confidence >= 0.45 else "Low"
-            ),
+            "confidenceLabel": _confidence_label(confidence),
             "summary": summary,
         },
         "drivers": drivers,
         "affectedAreas": affected,
         "dispatch": {"implication": implication, "safeToPass": safe},
         "method": {
-            "name": "historic_stage_trajectory_v0",
-            "inputs": ["ea_stage_history", "live_stage_hour"],
+            "name": "historic_analogue_v1",
+            "inputs": ["ea_stage_history_hour", "corridor_gauge_set"],
+            "parameters": {
+                "windowHours": 24,
+                "historyDays": history_days,
+                "topK": 20,
+                "minSimilarity": 0.85,
+            },
             "notes": (
-                "v0 uses station-relative percentiles and recent slope from mined EA readings. "
-                "Not a rainfall lag or depth model."
+                "Matches current multi-gauge shape to past EA windows. "
+                "Not a rainfall-lag or depth model; confidence reflects analogue agreement."
             ),
         },
         "observables": {
