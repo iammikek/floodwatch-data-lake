@@ -24,7 +24,7 @@ services:
     volumes:
       - ./:/app
     ports:
-      - "8000:8000"
+      - "${LAKE_API_HOST_PORT:-8000}:8000"
     command: >
       bash -lc "chmod +x scripts/start-api.sh && ./scripts/start-api.sh"
     healthcheck:
