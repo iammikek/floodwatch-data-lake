@@ -30,8 +30,11 @@ Prereqs: Docker Desktop, `.env` configured, network access to EA APIs.
 # Explicit window (recommended for v1: 24–60 months)
 FROM=2022-01 TO=2026-03 ./scripts/run-corridor-backfill.sh
 
+# Extended window for golden eval scenarios (Jan 2014, Feb 2020)
+FROM=2013-12 TO=2026-09 ./scripts/run-corridor-backfill.sh
+
 # Re-run safely — skips months that already have files
-RESUME=1 FROM=2022-01 TO=2026-03 ./scripts/run-corridor-backfill.sh
+RESUME=1 FROM=2013-12 TO=2026-09 ./scripts/run-corridor-backfill.sh
 ```
 
 Output path per month:
