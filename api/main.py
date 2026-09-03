@@ -1,5 +1,7 @@
+import os
 from fastapi import Depends, FastAPI, Query, Request
-from typing import Optional, Dict, Any
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 from api.models import (
     MeasurementsResponse,
@@ -18,7 +20,27 @@ from api.routes.warnings import router as warnings_router
 from api.routes.predictions import router as predictions_router
 
 
+def _cors_origins() -> List[str]:
+    """Browser origins allowed to call the API (local Vite wireframes by default)."""
+    raw = (os.getenv("CORS_ALLOW_ORIGINS") or "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
+        "http://localhost:5177",
+        "http://127.0.0.1:5177",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
 app = FastAPI(title="Flood Watch Data Lake API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 _api_deps = [Depends(require_api_token)]
 app.include_router(measurements_router, dependencies=_api_deps)
 app.include_router(polygons_router, dependencies=_api_deps)
