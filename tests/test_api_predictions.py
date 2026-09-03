@@ -15,8 +15,12 @@ class PredictionsApiTests(unittest.TestCase):
     def test_list_corridors(self):
         r = self.client.get("/v1/predictions/corridors")
         self.assertEqual(r.status_code, 200)
-        ids = [c["id"] for c in r.json()["corridors"]]
+        body = r.json()
+        self.assertIn("corridors", body)
+        self.assertIsInstance(body["corridors"], list)
+        ids = [c["id"] for c in body["corridors"]]
         self.assertIn("a361-muchelney", ids)
+        self.assertEqual(body["corridors"][0]["region"], "SOM")
 
     def test_unknown_corridor_404(self):
         r = self.client.get("/v1/predictions", params={"corridor": "no-such"})
@@ -48,7 +52,12 @@ class PredictionsApiTests(unittest.TestCase):
                 ],
                 "affectedAreas": [],
                 "dispatch": {"implication": "ok", "safeToPass": True},
-                "method": {"name": "historic_analogue_v1", "inputs": [], "notes": ""},
+                "method": {
+                    "name": "historic_analogue_v1",
+                    "inputs": [],
+                    "parameters": {"windowHours": 24, "historyDays": 120, "topK": 20, "minSimilarity": 0.85},
+                    "notes": "",
+                },
                 "observables": {"gaugeSeries": {}},
             }
 
@@ -59,10 +68,16 @@ class PredictionsApiTests(unittest.TestCase):
                 "/v1/predictions",
                 params={"corridor": "a361-muchelney"},
             )
+            body = r.json()
             self.assertEqual(r.status_code, 200)
-            self.assertEqual(r.json()["schema"], "floodwatch.prediction.v1")
-            self.assertEqual(r.json()["prediction"]["verdict"], "clear")
-            self.assertEqual(r.json()["method"]["name"], "historic_analogue_v1")
+            self.assertEqual(body["schema"], "floodwatch.prediction.v1")
+            self.assertEqual(body["prediction"]["verdict"], "clear")
+            self.assertEqual(body["method"]["name"], "historic_analogue_v1")
+            self.assertIn("drivers", body)
+            self.assertIn("dispatch", body)
+            self.assertIn("observables", body)
+            self.assertIn("parameters", body["method"])
+            self.assertEqual(body["drivers"][0]["type"], "historic_analogue")
         finally:
             predictions_route.predict_corridor = original
 

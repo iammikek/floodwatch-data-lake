@@ -88,6 +88,127 @@ components:
     WarningList:
       type: array
       items: { $ref: '#/components/schemas/Warning' }
+    PredictionImpactWindow:
+      type: object
+      nullable: true
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+    PredictionSummary:
+      type: object
+      properties:
+        verdict: { type: string, enum: [clear, watch, at_risk, likely_impassable] }
+        verdictLabel: { type: string }
+        timeToImpactHours: { type: number, nullable: true }
+        impactWindow: { $ref: '#/components/schemas/PredictionImpactWindow' }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        confidenceLabel: { type: string, enum: [Low, Medium, High] }
+        summary: { type: string }
+    PredictionDriver:
+      type: object
+      description: >
+        Stable v1 driver row. Shape varies by type; consumers should branch on `type`.
+        Current v1 types are `gauge_trajectory`, `historic_analogue`, and `analogue_consensus`.
+      properties:
+        type: { type: string, enum: [gauge_trajectory, historic_analogue, analogue_consensus] }
+        ref: { type: string }
+        label: { type: string }
+        signal: { type: string }
+        level: { type: number, nullable: true }
+        pct_rank: { type: number, nullable: true }
+        slope_per_hour: { type: number, nullable: true }
+        similarity: { type: number, nullable: true }
+        outcome: { type: string, enum: [impact, watch, clear], nullable: true }
+        timeToImpactHours: { type: number, nullable: true }
+        impactRate: { type: number, nullable: true }
+        watchRate: { type: number, nullable: true }
+    PredictionAffectedArea:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        kind: { type: string }
+        risk: { type: string, enum: [low, medium, high] }
+    PredictionDispatch:
+      type: object
+      properties:
+        implication: { type: string }
+        safeToPass: { type: boolean }
+    PredictionMethod:
+      type: object
+      properties:
+        name: { type: string, enum: [historic_analogue_v1] }
+        inputs:
+          type: array
+          items: { type: string }
+        parameters:
+          type: object
+          properties:
+            windowHours: { type: integer }
+            historyDays: { type: integer }
+            topK: { type: integer }
+            minSimilarity: { type: number }
+        notes: { type: string }
+    PredictionPrimaryAnalysis:
+      type: object
+      properties:
+        level: { type: number, nullable: true }
+        slope_per_hour: { type: number, nullable: true }
+        pct_rank: { type: number, nullable: true }
+        p70: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
+        p95: { type: number, nullable: true }
+        signal: { type: string }
+        hours_to_p95: { type: number, nullable: true }
+        as_of_point: { type: string, format: date-time, nullable: true }
+    PredictionObservables:
+      type: object
+      properties:
+        seriesStart: { type: string, format: date-time, nullable: true }
+        keyGaugeId: { type: string }
+        rainfallUpstreamMm:
+          type: array
+          items: { type: number }
+        gaugeSeries:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: number }
+        primaryMeasureId: { type: string }
+        primaryAnalysis: { $ref: '#/components/schemas/PredictionPrimaryAnalysis' }
+    CorridorPredictionResponse:
+      type: object
+      properties:
+        schema: { type: string, enum: [floodwatch.prediction.v1] }
+        as_of: { type: string, format: date-time }
+        region: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+        corridor:
+          type: object
+          properties:
+            id: { type: string }
+            label: { type: string }
+        prediction: { $ref: '#/components/schemas/PredictionSummary' }
+        drivers:
+          type: array
+          items: { $ref: '#/components/schemas/PredictionDriver' }
+        affectedAreas:
+          type: array
+          items: { $ref: '#/components/schemas/PredictionAffectedArea' }
+        dispatch: { $ref: '#/components/schemas/PredictionDispatch' }
+        method: { $ref: '#/components/schemas/PredictionMethod' }
+        observables: { $ref: '#/components/schemas/PredictionObservables' }
+    PredictionCorridor:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        region: { type: string, enum: [BRI, SOM, DOR, DEV, CON] }
+    PredictionCorridorListResponse:
+      type: object
+      properties:
+        corridors:
+          type: array
+          items: { $ref: '#/components/schemas/PredictionCorridor' }
     RetrieveContextResponse:
       type: object
       properties:
@@ -361,6 +482,120 @@ paths:
                               - [ -2.98, 51.10 ]
                               - [ -3.00, 51.10 ]
                         source: "ea:flood-monitoring"
+  /v1/predictions:
+    get:
+      summary: Get corridor prediction from historic EA analogue matching
+      description: >
+        Returns the current `floodwatch.prediction.v1` document for a configured corridor.
+        v1 uses a multi-gauge historic analogue matcher over mined EA stage history and emits
+        `historic_analogue` drivers, consensus rates, and a dispatch implication.
+      parameters:
+        - in: query
+          name: corridor
+          required: true
+          schema: { type: string, example: a361-muchelney }
+          description: Corridor id from `/v1/predictions/corridors`
+        - in: query
+          name: history_days
+          schema: { type: integer, minimum: 7, maximum: 400, default: 120 }
+          description: Lookback window for loading mined history
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CorridorPredictionResponse' }
+              examples:
+                analogue_match:
+                  summary: Rising corridor with matched analogues
+                  value:
+                    schema: "floodwatch.prediction.v1"
+                    as_of: "2026-09-03T12:00:00Z"
+                    region: "SOM"
+                    corridor: { id: "a361-muchelney", label: "A361 Muchelney corridor" }
+                    prediction:
+                      verdict: "at_risk"
+                      verdictLabel: "At risk within window"
+                      timeToImpactHours: 6
+                      impactWindow:
+                        from: "2026-09-03T16:00:00Z"
+                        to: "2026-09-03T21:00:00Z"
+                      confidence: 0.78
+                      confidenceLabel: "High"
+                      summary: "Historic EA matches indicate likely corridor disruption within the next day."
+                    drivers:
+                      - type: "gauge_trajectory"
+                        ref: "52119-level-stage-i-15_min-mASD"
+                        label: "Gaw Bridge · River Parrett"
+                        signal: "rising_toward_high"
+                        level: 2.24
+                        pct_rank: 91.2
+                        slope_per_hour: 0.018
+                      - type: "historic_analogue"
+                        ref: "2020-02-16T00:00:00Z"
+                        label: "Feb 2020 analogue"
+                        similarity: 0.91
+                        outcome: "impact"
+                        timeToImpactHours: 8
+                      - type: "analogue_consensus"
+                        ref: "k12"
+                        label: "12 matched windows"
+                        impactRate: 0.75
+                        watchRate: 0.08
+                    affectedAreas:
+                      - id: "area-muchelney-lanes"
+                        label: "Muchelney low lanes"
+                        kind: "road_segment"
+                        risk: "high"
+                    dispatch:
+                      implication: "Hold non-urgent runs on A361 Muchelney corridor within ~6h if levels keep rising."
+                      safeToPass: false
+                    method:
+                      name: "historic_analogue_v1"
+                      inputs: ["ea_stage_history_hour", "corridor_gauge_set"]
+                      parameters:
+                        windowHours: 24
+                        historyDays: 120
+                        topK: 20
+                        minSimilarity: 0.85
+                      notes: "Matches current multi-gauge shape to past EA windows. Not a rainfall-lag or depth model; confidence reflects analogue agreement."
+                    observables:
+                      seriesStart: "2026-09-03T01:00:00Z"
+                      keyGaugeId: "gauge-gaw-bridge"
+                      rainfallUpstreamMm: []
+                      gaugeSeries:
+                        gauge-gaw-bridge: [1.82, 1.86, 1.9, 1.94, 2.0, 2.05, 2.1, 2.14, 2.17, 2.2, 2.22, 2.24]
+                      primaryMeasureId: "52119-level-stage-i-15_min-mASD"
+                      primaryAnalysis:
+                        level: 2.24
+                        slope_per_hour: 0.018
+                        pct_rank: 91.2
+                        p70: 1.61
+                        p90: 2.03
+                        p95: 2.18
+                        signal: "rising_toward_high"
+                        hours_to_p95: null
+                        as_of_point: "2026-09-03T12:00:00Z"
+        '404':
+          description: Unknown corridor id
+        '500':
+          description: Prediction generation failed
+  /v1/predictions/corridors:
+    get:
+      summary: List supported prediction corridors
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PredictionCorridorListResponse' }
+              examples:
+                default:
+                  value:
+                    corridors:
+                      - id: "a361-muchelney"
+                        label: "A361 Muchelney corridor"
+                        region: "SOM"
   /v1/retrieve-context:
     get:
       summary: Retrieve signals and snippets for RAG
