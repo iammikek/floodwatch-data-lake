@@ -99,9 +99,14 @@ class PredictionsApiTests(unittest.TestCase):
         self.assertIn("storms", body)
         ids = [s["id"] for s in body["storms"]]
         self.assertIn("eval-2020-02", ids)
+        self.assertIn("place-2020-02-ciara", ids)
+        self.assertGreaterEqual(len(ids), 6)
         detail = self.client.get("/v1/storms/eval-2020-02")
         self.assertEqual(detail.status_code, 200)
-        self.assertEqual(detail.json()["label"], "Storm Dennis (Feb 2020)")
+        body = detail.json()
+        self.assertEqual(body["label"], "Storm Dennis (Feb 2020)")
+        self.assertEqual(body.get("kind"), "named_storm")
+        self.assertTrue(body.get("impact_summary"))
         missing = self.client.get("/v1/storms/nope")
         self.assertEqual(missing.status_code, 404)
 
