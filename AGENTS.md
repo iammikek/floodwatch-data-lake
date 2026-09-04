@@ -11,8 +11,10 @@
   - Health: GET /healthz
 
 Notes
-- External source: Environment Agency Flood Monitoring (hydrology, rainfall)
-- Date params: use YYYY-MM-DD (startdate/enddate) for readings
+- External sources: Environment Agency Flood Monitoring (near-real-time) and Hydrology Time-Series archive (long retention)
+- Date params: flood-monitoring uses YYYY-MM-DD (startdate/enddate); hydrology uses mineq-date/maxeq-date
+- Empty gzip month files are treated as missing on resume (do not count as coverage)
+- Storm catalogue: `GET /v1/storms`; hindcast predictions: `GET /v1/predictions?as_of=...`
 
 How to Start Collector
 - Prereqs: Docker Desktop installed; running on macOS (Apple Silicon supported).
@@ -21,6 +23,11 @@ How to Start Collector
 - **Prediction corridor (4 gauges, A361 Muchelney):**
   - FROM=2022-01 TO=YYYY-MM ./scripts/run-corridor-backfill.sh
   - Docs: `docs/prediction-corridor-backfill.md`
+- **Hydrology archive (mapped gauges only):**
+  - `python -m ingestion.cli backfill-ea-hydrology-corridor --corridor a361-muchelney --from 2013-09 --to YYYY-MM --resume`
+  - Mapping: `api/config/hydrology_measures.py` (Westonzoyland confirmed; others pending)
+- **Storm replay:**
+  - `./scripts/replay-storms.sh`
 - Alternative via Makefile:
   - FROM=YYYY-MM TO=YYYY-MM REGION=SOM make collector
   - FROM=2022-01 TO=YYYY-MM make corridor-backfill

@@ -10,12 +10,18 @@ from ingestion.corridor_backfill import (
     corridor_measure_ids,
     coverage_report,
     default_to_month,
+    month_file_has_readings,
 )
 from api.config.corridors import list_corridor_ids
+from api.config.hydrology_measures import mapped_corridor_measures
 try:
     from ingestion.clients.ea import EAClient  # type: ignore
 except Exception:
     EAClient = None  # type: ignore
+try:
+    from ingestion.clients.hydrology import HydrologyClient  # type: ignore
+except Exception:
+    HydrologyClient = None  # type: ignore
 try:
     from ingestion.io import write_ndjson_gz  # type: ignore
 except Exception:
@@ -138,7 +144,7 @@ def _backfill_measure_months(
         y, mo = sy, sm
         while True:
             out_path = f"data/raw/ea/readings/{measure_id}/{y:04d}-{mo:02d}.ndjson.gz"
-            if not os.path.exists(out_path):
+            if not month_file_has_readings(out_path):
                 sdt = datetime(y, mo, 1, tzinfo=timezone.utc)
                 edt = next_month(y, mo)
                 since = sdt.strftime("%Y-%m-%d")
@@ -147,7 +153,19 @@ def _backfill_measure_months(
                     items: List[Dict[str, Any]] = client.get_readings(
                         measure_id, since=since, until=until, sorted_flag=True
                     )
-                    write_ndjson_gz(out_path, items)
+                    if items:
+                        write_ndjson_gz(out_path, items)
+                        print(
+                            f"wrote {len(items)} {measure_id} {y:04d}-{mo:02d}",
+                            flush=True,
+                        )
+                    else:
+                        if os.path.exists(out_path):
+                            os.remove(out_path)
+                        print(
+                            f"WARN empty {measure_id} {y:04d}-{mo:02d}: EA returned 0 readings",
+                            flush=True,
+                        )
                 except Exception as exc:
                     print(
                         f"WARN skip {measure_id} {y:04d}-{mo:02d}: {exc}",
@@ -179,6 +197,79 @@ def cmd_backfill_ea_corridor(args: argparse.Namespace) -> None:
     for measure_id in measure_ids:
         print(f"backfill corridor={args.corridor} measure={measure_id} from={from_month} to={to_month}")
         _backfill_measure_months(client, measure_id, from_month, to_month, resume=bool(args.resume))
+
+    report = coverage_report(args.corridor, from_month, to_month)
+    print(json.dumps(report, indent=2))
+
+
+def cmd_backfill_ea_hydrology_corridor(args: argparse.Namespace) -> None:
+    """Backfill corridor gauges from EA Hydrology archive where a mapping exists."""
+    if HydrologyClient is None:
+        raise SystemExit("HydrologyClient unavailable")
+    client = HydrologyClient()
+    measure_ids = corridor_measure_ids(args.corridor)
+    mappings = mapped_corridor_measures(measure_ids)
+    if not mappings:
+        raise SystemExit(
+            f"No hydrology mappings configured for corridor {args.corridor}. "
+            "See api/config/hydrology_measures.py"
+        )
+
+    from_month = args.from_month or "2013-09"
+    to_month = args.to_month or default_to_month()
+    sy, sm = map(int, from_month.split("-"))
+    ey, em = map(int, to_month.split("-"))
+
+    unmapped = [m for m in measure_ids if m not in {x["flood_monitoring_measure_id"] for x in mappings}]
+    for mid in unmapped:
+        print(f"SKIP no hydrology mapping for {mid}", flush=True)
+
+    for mapping in mappings:
+        fm_id = mapping["flood_monitoring_measure_id"]
+        hydro_id = mapping["hydrology_measure_id"]
+        print(
+            f"hydrology backfill corridor={args.corridor} measure={fm_id} "
+            f"hydro={hydro_id} from={from_month} to={to_month}",
+            flush=True,
+        )
+        y, mo = sy, sm
+        while True:
+            out_path = f"data/raw/ea/readings/{fm_id}/{y:04d}-{mo:02d}.ndjson.gz"
+            if args.resume and month_file_has_readings(out_path):
+                if y == ey and mo == em:
+                    break
+                if mo == 12:
+                    y += 1
+                    mo = 1
+                else:
+                    mo += 1
+                continue
+            sdt = datetime(y, mo, 1, tzinfo=timezone.utc)
+            edt = next_month(y, mo)
+            since = sdt.strftime("%Y-%m-%d")
+            until = (edt - timedelta(days=1)).strftime("%Y-%m-%d")
+            try:
+                raw = client.get_readings(hydro_id, since=since, until=until)
+                items = HydrologyClient.to_flood_monitoring_shape(raw, fm_id)
+                if items:
+                    write_ndjson_gz(out_path, items)
+                    print(f"wrote {len(items)} {fm_id} {y:04d}-{mo:02d} (hydrology)", flush=True)
+                else:
+                    if os.path.exists(out_path):
+                        os.remove(out_path)
+                    print(
+                        f"WARN empty {fm_id} {y:04d}-{mo:02d}: hydrology returned 0 readings",
+                        flush=True,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                print(f"WARN skip {fm_id} {y:04d}-{mo:02d}: {exc}", flush=True)
+            if y == ey and mo == em:
+                break
+            if mo == 12:
+                y += 1
+                mo = 1
+            else:
+                mo += 1
 
     report = coverage_report(args.corridor, from_month, to_month)
     print(json.dumps(report, indent=2))
@@ -565,6 +656,16 @@ def build_parser() -> argparse.ArgumentParser:
     pbc.add_argument("--to", dest="to_month", help="YYYY-MM; default current month")
     pbc.add_argument("--resume", action="store_true", help="skip existing monthly files")
     pbc.set_defaults(func=cmd_backfill_ea_corridor)
+
+    pbh = sub.add_parser(
+        "backfill-ea-hydrology-corridor",
+        help="backfill mapped corridor gauges from EA Hydrology archive",
+    )
+    pbh.add_argument("--corridor", required=True, choices=list_corridor_ids())
+    pbh.add_argument("--from", dest="from_month", help="YYYY-MM; default 2013-09")
+    pbh.add_argument("--to", dest="to_month", help="YYYY-MM; default current month")
+    pbh.add_argument("--resume", action="store_true", help="skip months that already have readings")
+    pbh.set_defaults(func=cmd_backfill_ea_hydrology_corridor)
 
     pcc = sub.add_parser(
         "check-corridor-coverage",

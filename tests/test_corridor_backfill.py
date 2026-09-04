@@ -21,6 +21,54 @@ class CorridorBackfillTests(unittest.TestCase):
         self.assertIn("52153-level-stage-i-15_min-mASD", ids)
         self.assertEqual(len(ids), 4)
 
+    def test_coverage_treats_empty_gzip_as_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = os.path.join(td, "readings")
+            measure = "52119-level-stage-i-15_min-mASD"
+            os.makedirs(os.path.join(root, measure), exist_ok=True)
+            path = os.path.join(root, measure, "2026-01.ndjson.gz")
+            with gzip.open(path, "wt"):
+                pass
+
+            cov = coverage_for_measure(measure, "2026-01", "2026-01", data_root=root)
+            self.assertEqual(cov.present_months, 0)
+            self.assertEqual(cov.missing, ["2026-01"])
+
+    def test_resume_refetches_empty_gzip(self):
+        calls = []
+
+        class _FakeEA:
+            def get_readings(self, measure_id, since=None, until=None, sorted_flag=True):
+                calls.append((measure_id, since, until))
+                return [{"@id": "1", "value": 1.0, "measure": measure_id}]
+
+        original = ingestion_cli.EAClient
+        try:
+            ingestion_cli.EAClient = lambda: _FakeEA()  # type: ignore
+            cwd = os.getcwd()
+            with tempfile.TemporaryDirectory() as td:
+                os.chdir(td)
+                measure = corridor_measure_ids("a361-muchelney")[0]
+                out_dir = os.path.join("data", "raw", "ea", "readings", measure)
+                os.makedirs(out_dir, exist_ok=True)
+                empty = os.path.join(out_dir, "2026-01.ndjson.gz")
+                with gzip.open(empty, "wt"):
+                    pass
+                args = SimpleNamespace(
+                    corridor="a361-muchelney",
+                    from_month="2026-01",
+                    to_month="2026-01",
+                    resume=True,
+                )
+                ingestion_cli.cmd_backfill_ea_corridor(args)
+                self.assertEqual(len(calls), 4)
+                with gzip.open(empty, "rt") as f:
+                    rows = [json.loads(line) for line in f]
+                self.assertEqual(len(rows), 1)
+        finally:
+            ingestion_cli.EAClient = original  # type: ignore
+            os.chdir(cwd)
+
     def test_coverage_detects_present_and_missing(self):
         with tempfile.TemporaryDirectory() as td:
             root = os.path.join(td, "readings")
