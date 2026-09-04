@@ -81,7 +81,7 @@ python -m unittest tests.test_real_storm_replay -v
 ## Cockpit (flood-watch)
 
 - [x] Place-first surface (route UI behind `SHOW_ROUTE_VIEW=false`)
-- [x] Storm replay picker + place history list
+- [x] Storm replay picker + place history list (expanded Muchelney catalogue with kind / severity / impact_summary)
 - [x] Larger place map; default `place` preset (flood bounds + gauges, route off)
 - [x] Production mode: no silent mock fallback
 - [x] Prediction panel first in main column

@@ -610,6 +610,9 @@ paths:
                         corridor: { type: string }
                         as_of: { type: string, format: date-time }
                         expected_verdict: { type: string }
+                        kind: { type: string, description: "major_flood | named_storm | wet_spell | control" }
+                        severity: { type: string, description: "high | medium | low" }
+                        impact_summary: { type: string }
                         notes: { type: string }
         '404':
           description: Unknown corridor id
