@@ -87,9 +87,17 @@ class HydrologyClient:
             date_time = item.get("dateTime") or item.get("date")
             if not date_time:
                 continue
+            # Normalise to UTC ISO-8601 with Z so lake loaders stay timezone-aware.
+            dt_text = str(date_time).strip()
+            if dt_text.endswith("Z"):
+                pass
+            elif "+" in dt_text[10:] or dt_text.endswith("UTC"):
+                pass
+            else:
+                dt_text = f"{dt_text}Z"
             row: Dict[str, Any] = {
                 "@id": item.get("@id"),
-                "dateTime": date_time,
+                "dateTime": dt_text,
                 "value": value,
                 "measure": flood_monitoring_measure_id,
                 "quality": item.get("quality"),

@@ -65,18 +65,30 @@ def read_ndjson_gz(path: str) -> List[Dict[str, Any]]:
             return []
     return items
 
+def _as_utc(dt: datetime) -> datetime:
+    """Treat naive timestamps as UTC (EA hydrology archive often omits Z)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def series_points(items: List[Dict[str, Any]], from_: datetime, to: datetime) -> List[SeriesPoint]:
     pts: List[SeriesPoint] = []
+    from_utc = _as_utc(from_)
+    to_utc = _as_utc(to)
     for it in items:
         dt = it.get("dateTime") or it.get("date") or it.get("time")
         val = it.get("value")
         if not dt or val is None:
             continue
         try:
-            t = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            raw = str(dt).strip()
+            if raw.endswith("Z"):
+                raw = raw[:-1] + "+00:00"
+            t = _as_utc(datetime.fromisoformat(raw))
         except Exception:
             continue
-        if t < from_ or t > to:
+        if t < from_utc or t > to_utc:
             continue
         pts.append(SeriesPoint(t=t, value=float(val), agg="raw", quality=it.get("qualifier")))
     pts.sort(key=lambda p: p.t)
@@ -97,7 +109,7 @@ def aggregate_points(pts: List[SeriesPoint], mode: str) -> List[SeriesPoint]:
     out: List[SeriesPoint] = []
     for k, vs in buckets.items():
         if mode == "hour":
-            t = datetime.fromisoformat(k)
+            t = _as_utc(datetime.fromisoformat(k))
         else:
             t = datetime.fromisoformat(k + "T00:00:00+00:00")
         out.append(SeriesPoint(t=t, value=sum(vs) / len(vs), agg=mode))
