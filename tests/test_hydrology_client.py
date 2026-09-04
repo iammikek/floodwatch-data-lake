@@ -18,6 +18,17 @@ class HydrologyClientTests(unittest.TestCase):
         self.assertEqual(out[0]["provenance"], "ea_hydrology_archive")
         self.assertEqual(out[1]["quality"], "Unchecked")
 
+    def test_proxy_fields_when_requested(self):
+        items = [{"dateTime": "2020-02-01T00:00:00", "value": 1.2}]
+        out = HydrologyClient.to_flood_monitoring_shape(
+            items,
+            "52119-level-stage-i-15_min-mASD",
+            proxy=True,
+            proxy_label="Thorney Mill (proxy for Gaw Bridge)",
+        )
+        self.assertTrue(out[0]["proxy"])
+        self.assertEqual(out[0]["proxyStation"], "Thorney Mill (proxy for Gaw Bridge)")
+
 
 if __name__ == "__main__":
     unittest.main()

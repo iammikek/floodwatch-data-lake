@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: floodwatch-lake-worker
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       PYTHONUNBUFFERED: "1"
     volumes:
@@ -18,7 +19,8 @@ services:
       dockerfile: Dockerfile
     container_name: floodwatch-lake-api
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       PYTHONUNBUFFERED: "1"
     volumes:
@@ -26,7 +28,7 @@ services:
     ports:
       - "${LAKE_API_HOST_PORT:-8000}:8000"
     command: >
-      bash -lc "chmod +x scripts/start-api.sh && ./scripts/start-api.sh"
+      bash -lc "exec bash scripts/start-api.sh"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 10s

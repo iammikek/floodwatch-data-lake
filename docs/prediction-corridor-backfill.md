@@ -41,7 +41,27 @@ python -m ingestion.cli backfill-ea-hydrology-corridor \
   --corridor a361-muchelney --from 2013-09 --to 2026-09 --resume
 ```
 
-Gaw Bridge / Midelney / Langport Great Bow are **not** yet mapped to hydrology GUIDs (they do not resolve under flood-monitoring stationReference in the Hydrology API). Extend `api/config/hydrology_measures.py` when GUIDs are confirmed.
+Gaw Bridge / Midelney / Langport Great Bow are **not** exact matches in the
+Hydrology catalogue. Proxies in `api/config/hydrology_measures.py`:
+
+| FM measure | Proxy hydrology station | Notes |
+|------------|-------------------------|-------|
+| Gaw Bridge `52119-…` | Thorney Mill (~3.1 km) | Archive from 2011; covers 2014/2020 |
+| Great Bow `52230-…` | Monks Leaze (~1 km) | Archive from 2007; covers 2014/2020 |
+| Midelney `52153-…` | *(none yet)* | Midelney Lock is ~90 m but only from Aug 2022 |
+| Westonzoyland `52245-…` | Exact match | Archive from 1998 |
+
+```bash
+# Hydrology archive (mapped + proxy gauges) — use last full month as --to
+python -m ingestion.cli backfill-ea-hydrology-corridor \
+  --corridor a361-muchelney --from 2013-09 --to 2026-08 --resume
+```
+
+Via Docker:
+```bash
+docker compose exec -T lake-worker python -m ingestion.cli backfill-ea-hydrology-corridor \
+  --corridor a361-muchelney --from 2013-09 --to 2026-08 --resume
+```
 
 Output path per month:
 
