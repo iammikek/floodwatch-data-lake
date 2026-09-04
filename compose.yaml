@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: floodwatch-lake-worker
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       PYTHONUNBUFFERED: "1"
     volumes:
@@ -18,7 +19,8 @@ services:
       dockerfile: Dockerfile
     container_name: floodwatch-lake-api
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       PYTHONUNBUFFERED: "1"
     volumes:
