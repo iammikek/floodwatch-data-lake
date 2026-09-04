@@ -26,6 +26,7 @@ How to Start Collector
 - **Hydrology archive (mapped gauges only):**
   - `python -m ingestion.cli backfill-ea-hydrology-corridor --corridor a361-muchelney --from 2013-09 --to YYYY-MM --resume`
   - Mapping: `api/config/hydrology_measures.py` (Westonzoyland exact; Gaw→Thorney Mill proxy; Great Bow→Monks Leaze proxy; Midelney optional / unmapped)
+- Flood zone map overlays: need `data/curated/ea/SOM_fz2_3_simplified.geojson` (from normalized via `./scripts/build-flood-zones-simplified.sh`); inline API clips/caps for the viewport
 - **Storm replay:**
   - `./scripts/replay-storms.sh`
 - Alternative via Makefile:
