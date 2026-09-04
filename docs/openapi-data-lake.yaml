@@ -499,6 +499,10 @@ paths:
           name: history_days
           schema: { type: integer, minimum: 7, maximum: 400, default: 120 }
           description: Lookback window for loading mined history
+        - in: query
+          name: as_of
+          schema: { type: string, format: date-time, example: "2020-02-16T12:00:00Z" }
+          description: Optional UTC evaluation instant for storm replay / hindcast
       responses:
         '200':
           description: OK
@@ -580,6 +584,48 @@ paths:
           description: Unknown corridor id
         '500':
           description: Prediction generation failed
+  /v1/storms:
+    get:
+      summary: List curated storms for place-mode replay
+      parameters:
+        - in: query
+          name: corridor
+          schema: { type: string, example: a361-muchelney }
+          description: Optional corridor filter
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        label: { type: string }
+                        corridor: { type: string }
+                        as_of: { type: string, format: date-time }
+                        expected_verdict: { type: string }
+                        notes: { type: string }
+        '404':
+          description: Unknown corridor id
+  /v1/storms/{storm_id}:
+    get:
+      summary: Get one curated storm
+      parameters:
+        - in: path
+          name: storm_id
+          required: true
+          schema: { type: string, example: eval-2020-02 }
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Unknown storm id
   /v1/predictions/corridors:
     get:
       summary: List supported prediction corridors

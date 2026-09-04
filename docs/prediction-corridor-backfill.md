@@ -30,9 +30,18 @@ Prereqs: Docker Desktop, `.env` configured, network access to EA APIs.
 # Explicit window (recommended for v1: 24–60 months)
 FROM=2022-01 TO=2026-03 ./scripts/run-corridor-backfill.sh
 
-# Re-run safely — skips months that already have files
-RESUME=1 FROM=2022-01 TO=2026-03 ./scripts/run-corridor-backfill.sh
+# Extended window for golden eval scenarios (Jan 2014, Feb 2020)
+FROM=2013-12 TO=2026-09 ./scripts/run-corridor-backfill.sh
+
+# Re-run safely — skips months that already have non-empty readings
+RESUME=1 FROM=2013-12 TO=2026-09 ./scripts/run-corridor-backfill.sh
+
+# Hydrology archive (long retention) for mapped gauges — currently Westonzoyland
+python -m ingestion.cli backfill-ea-hydrology-corridor \
+  --corridor a361-muchelney --from 2013-09 --to 2026-09 --resume
 ```
+
+Gaw Bridge / Midelney / Langport Great Bow are **not** yet mapped to hydrology GUIDs (they do not resolve under flood-monitoring stationReference in the Hydrology API). Extend `api/config/hydrology_measures.py` when GUIDs are confirmed.
 
 Output path per month:
 

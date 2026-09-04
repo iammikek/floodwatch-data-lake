@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -51,6 +52,20 @@ def readings_path(measure_id: str, year: int, month: int, data_root: str = "data
     return os.path.join(data_root, measure_id, f"{year:04d}-{month:02d}.ndjson.gz")
 
 
+def month_file_has_readings(path: str) -> bool:
+    """True when a monthly gzip contains at least one non-empty NDJSON line."""
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return False
+    try:
+        with gzip.open(path, "rt") as fh:
+            for line in fh:
+                if line.strip():
+                    return True
+    except OSError:
+        return False
+    return False
+
+
 @dataclass
 class MeasureCoverage:
     measure_id: str
@@ -74,7 +89,7 @@ def coverage_for_measure(
     for y, m in iter_months(from_month, to_month):
         label = f"{y:04d}-{m:02d}"
         path = readings_path(measure_id, y, m, data_root=data_root)
-        if os.path.isfile(path) and os.path.getsize(path) > 0:
+        if month_file_has_readings(path):
             present += 1
         else:
             missing.append(label)

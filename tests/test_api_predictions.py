@@ -27,10 +27,11 @@ class PredictionsApiTests(unittest.TestCase):
         self.assertEqual(r.status_code, 404)
 
     def test_prediction_ok_with_stubbed_service(self):
-        def fake_predict(corridor, history_days=120):
+        def fake_predict(corridor, history_days=120, now=None):
             return {
                 "schema": "floodwatch.prediction.v1",
                 "corridor": {"id": corridor, "label": "test"},
+                "as_of": (now.isoformat().replace("+00:00", "Z") if now else "2026-01-01T00:00:00Z"),
                 "prediction": {
                     "verdict": "clear",
                     "verdictLabel": "No predicted impact in window",
@@ -78,8 +79,31 @@ class PredictionsApiTests(unittest.TestCase):
             self.assertIn("observables", body)
             self.assertIn("parameters", body["method"])
             self.assertEqual(body["drivers"][0]["type"], "historic_analogue")
+
+            r2 = self.client.get(
+                "/v1/predictions",
+                params={
+                    "corridor": "a361-muchelney",
+                    "as_of": "2020-02-16T12:00:00Z",
+                },
+            )
+            self.assertEqual(r2.status_code, 200)
+            self.assertTrue(str(r2.json().get("as_of", "")).startswith("2020-02-16"))
         finally:
             predictions_route.predict_corridor = original
+
+    def test_storms_catalogue(self):
+        r = self.client.get("/v1/storms", params={"corridor": "a361-muchelney"})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("storms", body)
+        ids = [s["id"] for s in body["storms"]]
+        self.assertIn("eval-2020-02", ids)
+        detail = self.client.get("/v1/storms/eval-2020-02")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["label"], "Storm Dennis (Feb 2020)")
+        missing = self.client.get("/v1/storms/nope")
+        self.assertEqual(missing.status_code, 404)
 
 
 if __name__ == "__main__":
