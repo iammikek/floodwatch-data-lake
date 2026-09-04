@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Seed .env for compose
+        run: cp -n .env.example .env
       - name: Build and start services
         run: docker compose up -d --build
       - name: Wait for lake-api health
