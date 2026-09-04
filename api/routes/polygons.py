@@ -4,7 +4,17 @@ from typing import Optional, Dict, Any, List
 import os
 import json
 from api.models import PolygonsResponse
-from api.services.polygons import curated_polygons_path, parse_bbox, bbox_small, geom_bbox, bbox_intersects, tile_bbox, read_geojson_any
+from api.services.polygons import (
+    parse_bbox,
+    bbox_small,
+    geom_bbox,
+    bbox_intersects,
+    tile_bbox,
+    read_geojson_any,
+    prepare_inline_features,
+    resolve_curated_polygons_path,
+    curated_polygons_path,
+)
 from api.utils.cache import cache_get, cache_set
 from api.deps import rate_limiter, polygons_ttl
 
@@ -21,7 +31,7 @@ def get_polygons(
     bbox: Optional[str] = None,
     rl: Dict[str, int] = Depends(rate_limiter),
 ):
-    path = curated_polygons_path(dataset, region, scenario, format_)
+    path, resolved_format = resolve_curated_polygons_path(dataset, region, scenario, format_)
     try:
         data = read_geojson_any(path)
         feats = data.get("features") or []
@@ -32,7 +42,7 @@ def get_polygons(
         "region_id": region,
         "dataset": dataset,
         "scenario": scenario,
-        "format": format_,
+        "format": resolved_format,
         "path": path,
         "count": cnt,
     }
@@ -42,7 +52,7 @@ def get_polygons(
         w, s, e, n = parse_bbox(bbox)
         if not bbox_small(w, s, e, n):
             raise HTTPException(status_code=400, detail="bbox too large for inline response")
-        key = f"poly:inline:{dataset}:{region}:{scenario}:{format_}:{bbox}"
+        key = f"poly:inline:v2:{dataset}:{region}:{scenario}:{resolved_format}:{bbox}"
         cached = cache_get(key)
         if cached is not None:
             result["data"] = cached["data"]
@@ -55,11 +65,7 @@ def get_polygons(
             doc = read_geojson_any(path)
             feats = doc.get("features") or []
             target = [w, s, e, n]
-            filtered: List[Dict[str, Any]] = []
-            for feat in feats:
-                gb = geom_bbox(feat.get("geometry") or {})
-                if gb and bbox_intersects(gb, target):
-                    filtered.append(feat)
+            filtered = prepare_inline_features(feats if isinstance(feats, list) else [], target)
             payload = {"type": "FeatureCollection", "features": filtered}
             result["data"] = payload
             result["count"] = len(filtered)
