@@ -74,6 +74,9 @@ class HydrologyClient:
     def to_flood_monitoring_shape(
         items: List[Dict[str, Any]],
         flood_monitoring_measure_id: str,
+        *,
+        proxy: bool = False,
+        proxy_label: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Normalise hydrology readings into flood-monitoring-like NDJSON rows."""
         out: List[Dict[str, Any]] = []
@@ -84,14 +87,17 @@ class HydrologyClient:
             date_time = item.get("dateTime") or item.get("date")
             if not date_time:
                 continue
-            out.append(
-                {
-                    "@id": item.get("@id"),
-                    "dateTime": date_time,
-                    "value": value,
-                    "measure": flood_monitoring_measure_id,
-                    "quality": item.get("quality"),
-                    "provenance": "ea_hydrology_archive",
-                }
-            )
+            row: Dict[str, Any] = {
+                "@id": item.get("@id"),
+                "dateTime": date_time,
+                "value": value,
+                "measure": flood_monitoring_measure_id,
+                "quality": item.get("quality"),
+                "provenance": "ea_hydrology_archive",
+            }
+            if proxy:
+                row["proxy"] = True
+                if proxy_label:
+                    row["proxyStation"] = proxy_label
+            out.append(row)
         return out

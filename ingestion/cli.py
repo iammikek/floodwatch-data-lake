@@ -250,10 +250,16 @@ def cmd_backfill_ea_hydrology_corridor(args: argparse.Namespace) -> None:
             until = (edt - timedelta(days=1)).strftime("%Y-%m-%d")
             try:
                 raw = client.get_readings(hydro_id, since=since, until=until)
-                items = HydrologyClient.to_flood_monitoring_shape(raw, fm_id)
+                items = HydrologyClient.to_flood_monitoring_shape(
+                    raw,
+                    fm_id,
+                    proxy=bool(mapping.get("proxy")),
+                    proxy_label=str(mapping.get("label") or "") or None,
+                )
                 if items:
                     write_ndjson_gz(out_path, items)
-                    print(f"wrote {len(items)} {fm_id} {y:04d}-{mo:02d} (hydrology)", flush=True)
+                    kind = "proxy" if mapping.get("proxy") else "hydrology"
+                    print(f"wrote {len(items)} {fm_id} {y:04d}-{mo:02d} ({kind})", flush=True)
                 else:
                     if os.path.exists(out_path):
                         os.remove(out_path)

@@ -25,7 +25,7 @@ How to Start Collector
   - Docs: `docs/prediction-corridor-backfill.md`
 - **Hydrology archive (mapped gauges only):**
   - `python -m ingestion.cli backfill-ea-hydrology-corridor --corridor a361-muchelney --from 2013-09 --to YYYY-MM --resume`
-  - Mapping: `api/config/hydrology_measures.py` (Westonzoyland confirmed; others pending)
+  - Mapping: `api/config/hydrology_measures.py` (Westonzoyland exact; Gaw→Thorney Mill proxy; Great Bow→Monks Leaze proxy; Midelney pending)
 - **Storm replay:**
   - `./scripts/replay-storms.sh`
 - Alternative via Makefile:
