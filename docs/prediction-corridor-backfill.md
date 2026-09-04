@@ -48,7 +48,8 @@ Hydrology catalogue. Proxies in `api/config/hydrology_measures.py`:
 |------------|-------------------------|-------|
 | Gaw Bridge `52119-…` | Thorney Mill (~3.1 km) | Archive from 2011; covers 2014/2020 |
 | Great Bow `52230-…` | Monks Leaze (~1 km) | Archive from 2007; covers 2014/2020 |
-| Midelney `52153-…` | *(none yet)* | Midelney Lock is ~90 m but only from Aug 2022 |
+| Midelney `52153-…` | *(optional; omitted from fingerprints)* | Midelney Lock is ~90 m but only from Aug 2022 |
+
 | Westonzoyland `52245-…` | Exact match | Archive from 1998 |
 
 ```bash

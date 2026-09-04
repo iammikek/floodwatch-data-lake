@@ -123,6 +123,47 @@ class PredictCorridorTests(unittest.TestCase):
         self.assertFalse(doc["dispatch"]["safeToPass"])
         self.assertTrue(any(d["type"] == "historic_analogue" for d in doc["drivers"]))
 
+    def test_predict_skips_optional_gauge_without_series(self):
+        start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        now = start + timedelta(hours=100)
+
+        def loader(measure_id, from_, to, aggregate="hour"):
+            if measure_id == "52153-level-stage-i-15_min-mASD":
+                return []
+            current_patterns = {
+                "52119-level-stage-i-15_min-mASD": [1.0] * 18 + [1.02, 1.05, 1.1, 1.16, 1.22, 1.28],
+                "52245-level-stage-i-15_min-m": [0.85] * 18 + [0.87, 0.9, 0.94, 0.98, 1.01, 1.04],
+                "52230-level-stage-i-15_min-m": [0.75] * 18 + [0.77, 0.8, 0.83, 0.86, 0.89, 0.92],
+            }
+            pattern = current_patterns[measure_id]
+            if measure_id == "52119-level-stage-i-15_min-mASD":
+                history = (
+                    [1.0] * 36
+                    + pattern
+                    + [1.36, 1.4, 1.44, 1.47, 1.49, 1.5]
+                    + [0.98] * 18
+                    + pattern
+                    + [1.62, 1.74, 1.88, 1.96, 2.04, 2.12]
+                    + [0.96] * 18
+                    + pattern
+                )
+            else:
+                history = (
+                    [0.9] * 36
+                    + pattern
+                    + [1.0] * 18
+                    + pattern
+                    + [1.12] * 18
+                    + pattern
+                )
+            return _pts(history, start)
+
+        doc = predict_corridor("a361-muchelney", history_days=30, now=now, series_loader=loader)
+        self.assertEqual(doc["method"]["parameters"]["activeGauges"], 3)
+        self.assertTrue(any(d["type"] == "historic_analogue" for d in doc["drivers"]))
+        midelney = next(d for d in doc["drivers"] if d.get("ref") == "52153-level-stage-i-15_min-mASD")
+        self.assertEqual(midelney["signal"], "no_data")
+
     def test_unknown_corridor(self):
         with self.assertRaises(KeyError):
             predict_corridor("nope", series_loader=lambda *a, **k: [])

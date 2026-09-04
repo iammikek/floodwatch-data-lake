@@ -26,7 +26,12 @@ CORRIDORS: Dict[str, Dict[str, Any]] = {
                 "measure_id": "52153-level-stage-i-15_min-mASD",
                 "label": "Midelney · River Isle (near Muchelney)",
                 "ref": "gauge-midelney",
-                "note": "No EA gauge named Muchelney; Midelney is closest",
+                "optional": True,
+                "note": (
+                    "No EA gauge named Muchelney; Midelney is closest. "
+                    "Optional until a long-retention hydrology series exists "
+                    "(Midelney Lock archive only from Aug 2022)."
+                ),
             },
             {
                 "measure_id": "52245-level-stage-i-15_min-m",
