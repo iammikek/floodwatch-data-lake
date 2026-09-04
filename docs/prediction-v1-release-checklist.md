@@ -10,7 +10,7 @@
 
 - [ ] All four corridor measures backfilled ≥ 24 months (target 60+)
   - `52119-level-stage-i-15_min-mASD` (Gaw Bridge) — flood-monitoring recent only; hydrology GUID pending
-  - `52153-level-stage-i-15_min-mASD` (Midelney) — hydrology GUID pending
+  - `52153-level-stage-i-15_min-mASD` (Midelney) — optional until long archive; omitted from analogue fingerprints when empty
   - `52245-level-stage-i-15_min-m` (Westonzoyland PS) — hydrology archive mapped
   - `52230-level-stage-i-15_min-m` (Langport Great Bow) — hydrology GUID pending
 - [ ] `check-corridor-coverage --min-months 24` exits 0
@@ -30,7 +30,7 @@
 
 | ID | Period | Expected verdict | Test |
 |----|--------|-----------------|------|
-| `eval-2014-01` | Jan 2014 Parrett rise | `at_risk` or `watch` | `tests/test_prediction_eval.py::EvalJan2014ParrettRise` |
+| `eval-2014-01` | Jan–Feb 2014 Levels flood (`as_of` mid-Feb) | `at_risk` or `watch` | `tests/test_prediction_eval.py::EvalJan2014ParrettRise` |
 | `eval-2020-02` | Storm Dennis Feb 2020 | `at_risk` | `tests/test_prediction_eval.py::EvalFeb2020StormDennis` |
 | `eval-stable-summer` | Aug 2018 low flow | `clear` | `tests/test_prediction_eval.py::EvalAug2018StableSummer` |
 | confidence monotonic | Synthetic gradient | impact ≥ mixed ≥ clear | `tests/test_prediction_eval.py::EvalConfidenceMonotonic` |

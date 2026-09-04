@@ -372,6 +372,32 @@ def _consensus_verdict(
     return ("clear", "No predicted impact in window", None, round(confidence, 2), summary, implication)
 
 
+def _analogue_measure_ids(
+    corridor: Dict[str, Any],
+    series_by_measure: Dict[str, Sequence[SeriesPoint]],
+) -> List[str]:
+    """Gauges used for multi-gauge fingerprints.
+
+    Required gauges (optional=False) must have series. Optional gauges (e.g.
+    Midelney without a long hydrology archive) are included only when present.
+    """
+    primary_id = corridor["primary"]["measure_id"]
+    active: List[str] = []
+    for gauge in corridor["gauges"]:
+        measure_id = gauge["measure_id"]
+        has_series = bool(series_by_measure.get(measure_id))
+        if has_series:
+            active.append(measure_id)
+        elif not gauge.get("optional"):
+            return []
+    if primary_id not in active or len(active) < 2:
+        return []
+    # Keep corridor order; primary first for outcome scoring.
+    if active[0] != primary_id:
+        active = [primary_id] + [m for m in active if m != primary_id]
+    return active
+
+
 def _build_analogue_rows(
     corridor: Dict[str, Any],
     series_by_measure: Dict[str, Sequence[SeriesPoint]],
@@ -383,16 +409,11 @@ def _build_analogue_rows(
     min_similarity: float,
     top_k: int,
 ) -> List[Dict[str, Any]]:
-    gauges = corridor["gauges"]
-    measure_ids = [g["measure_id"] for g in gauges]
-    values_by_measure = _values_by_measure(series_by_measure, measure_ids)
-    latest_times = [
-        series_by_measure[measure_id][-1].t
-        for measure_id in measure_ids
-        if series_by_measure.get(measure_id)
-    ]
-    if len(latest_times) != len(measure_ids):
+    measure_ids = _analogue_measure_ids(corridor, series_by_measure)
+    if not measure_ids:
         return []
+    values_by_measure = _values_by_measure(series_by_measure, measure_ids)
+    latest_times = [series_by_measure[measure_id][-1].t for measure_id in measure_ids]
     current_end = min(latest_times)
     current_fp = _fingerprint_for_window(series_by_measure, values_by_measure, measure_ids, current_end, window_hours)
     if not current_fp:
@@ -456,6 +477,7 @@ def predict_corridor(
     }
     primary_series = series_by_measure[primary["measure_id"]]
     primary_analysis = analyse_series(primary_series, now=now)
+    active_measures = _analogue_measure_ids(corridor, series_by_measure)
 
     analogue_rows = _build_analogue_rows(
         corridor,
@@ -560,9 +582,11 @@ def predict_corridor(
                 "historyDays": history_days,
                 "topK": 20,
                 "minSimilarity": 0.85,
+                "activeGauges": len(active_measures),
             },
             "notes": (
                 "Matches current multi-gauge shape to past EA windows. "
+                "Optional corridor gauges without archive are omitted from fingerprints. "
                 "Not a rainfall-lag or depth model; confidence reflects analogue agreement."
             ),
         },

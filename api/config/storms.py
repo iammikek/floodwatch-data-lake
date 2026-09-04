@@ -10,13 +10,16 @@ from typing import Any, Dict, List, Optional
 STORMS: List[Dict[str, Any]] = [
     {
         "id": "eval-2014-01",
-        "label": "Jan 2014 Parrett rise",
+        "label": "Jan–Feb 2014 Parrett / Levels flood",
         "corridor": "a361-muchelney",
         "place_label": "Muchelney / A361 corridor",
-        "as_of": "2014-01-15T12:00:00Z",
-        "window": {"from": "2014-01-01", "to": "2014-01-31"},
+        "as_of": "2014-02-13T12:00:00Z",
+        "window": {"from": "2014-01-01", "to": "2014-02-28"},
         "expected_verdict": "at_risk_or_watch",
-        "notes": "Somerset Levels winter flooding; Parrett gauges climbing together.",
+        "notes": (
+            "Somerset Levels winter flooding; Muchelney isolation peaked mid-February. "
+            "as_of is the mid-event evaluation instant (not early January onset)."
+        ),
     },
     {
         "id": "eval-2020-02",

@@ -16,6 +16,7 @@ class HydrologyClientTests(unittest.TestCase):
         self.assertEqual(len(out), 2)
         self.assertEqual(out[0]["measure"], "52245-level-stage-i-15_min-m")
         self.assertEqual(out[0]["provenance"], "ea_hydrology_archive")
+        self.assertEqual(out[0]["dateTime"], "2020-02-01T00:00:00Z")
         self.assertEqual(out[1]["quality"], "Unchecked")
 
     def test_proxy_fields_when_requested(self):
