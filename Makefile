@@ -44,8 +44,8 @@ rse-present-som:
 .PHONY: test test-api
 test:
 	@echo "Running unit tests inside lake-worker (Docker)..."
-	docker compose exec -T lake-worker python -m unittest discover -s tests -v
+	docker compose exec -T -u root lake-worker python -m unittest discover -s tests -v
 
 test-api:
 	@echo "Running API tests inside lake-api (Docker)..."
-	docker compose exec -T lake-api python -m unittest discover -s tests -v
+	docker compose exec -T -u root lake-api python -m unittest discover -s tests -v
