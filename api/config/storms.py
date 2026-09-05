@@ -3,16 +3,21 @@
 Timestamps are UTC evaluation instants for predict_corridor(now=...).
 Entries with as_of are replayable; place history surfaces the full set.
 
-impact_bbox is a curated approximate footprint (west,south,east,north) for
-map flood-bound clipping during replay — not modelled inundation.
-bounds_mode "none" means show no flood-bound overlay for that event.
+bounds_mode:
+  - "impact" — curated floodplain polygon (impact_geometry) + bbox envelope
+  - "none" — no flood-bound overlay (e.g. summer control)
+
+impact_geometry is a GeoJSON FeatureCollection (hand-curated v0).
+impact_bbox remains the envelope for clients that only clip by bbox.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-STORMS: List[Dict[str, Any]] = [
+from api.config.storm_extents import impact_bbox_for, impact_collection
+
+_STORMS_RAW: List[Dict[str, Any]] = [
     {
         "id": "eval-2014-01",
         "label": "Jan–Feb 2014 Parrett / Levels flood",
@@ -25,8 +30,6 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Muchelney cut off for weeks; A361 approaches flooded.",
         "bounds_mode": "impact",
-        # Wide Levels inundation at peak isolation.
-        "impact_bbox": [-2.98, 51.02, -2.68, 51.22],
         "notes": (
             "Somerset Levels winter flooding; Muchelney isolation peaked mid-February. "
             "as_of is the mid-event evaluation instant (not early January onset)."
@@ -44,7 +47,6 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Parrett catchment climbing; lanes starting to flood.",
         "bounds_mode": "impact",
-        "impact_bbox": [-2.90, 51.08, -2.74, 51.16],
         "notes": "Onset of the 2013–14 Levels emergency, before peak isolation.",
     },
     {
@@ -59,7 +61,6 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "medium",
         "impact_summary": "Saturated Levels; local road flooding risk elevated.",
         "bounds_mode": "impact",
-        "impact_bbox": [-2.88, 51.09, -2.76, 51.15],
         "notes": "Pre-winter wet period used as a secondary place-history marker.",
     },
     {
@@ -74,7 +75,6 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Named storm; Parrett corridor under pressure before Dennis.",
         "bounds_mode": "impact",
-        "impact_bbox": [-2.92, 51.06, -2.72, 51.18],
         "notes": "Storm Ciara weekend; Dennis followed a week later.",
     },
     {
@@ -89,7 +89,6 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Named-storm peak; corridor hindcast golden eval.",
         "bounds_mode": "impact",
-        "impact_bbox": [-2.95, 51.04, -2.70, 51.20],
         "notes": "Named storm window used for golden analogue eval.",
     },
     {
@@ -104,7 +103,6 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "medium",
         "impact_summary": "Winter wet spell on the Levels; monitoring window.",
         "bounds_mode": "impact",
-        "impact_bbox": [-2.87, 51.10, -2.77, 51.14],
         "notes": "More recent archive check for place history coverage.",
     },
     {
@@ -119,10 +117,28 @@ STORMS: List[Dict[str, Any]] = [
         "severity": "low",
         "impact_summary": "Low-flow control — no predicted place impact.",
         "bounds_mode": "none",
-        "impact_bbox": None,
         "notes": "Low-flow control window; expected clear / no impact analogues.",
     },
 ]
+
+
+def _enrich_storm(raw: Dict[str, Any]) -> Dict[str, Any]:
+    storm = dict(raw)
+    mode = str(storm.get("bounds_mode") or "").lower()
+    if mode == "none":
+        storm["impact_bbox"] = None
+        storm["impact_geometry"] = None
+        return storm
+
+    storm_id = str(storm["id"])
+    geom = impact_collection(storm_id, storm_label=str(storm.get("label") or ""))
+    bbox = impact_bbox_for(storm_id)
+    storm["impact_geometry"] = geom
+    storm["impact_bbox"] = bbox
+    return storm
+
+
+STORMS: List[Dict[str, Any]] = [_enrich_storm(row) for row in _STORMS_RAW]
 
 
 def list_storms(corridor: Optional[str] = None) -> List[Dict[str, Any]]:

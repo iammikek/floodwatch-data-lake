@@ -107,6 +107,12 @@ class PredictionsApiTests(unittest.TestCase):
         self.assertEqual(body["label"], "Storm Dennis (Feb 2020)")
         self.assertEqual(body.get("kind"), "named_storm")
         self.assertTrue(body.get("impact_summary"))
+        self.assertEqual(body.get("bounds_mode"), "impact")
+        geom = body.get("impact_geometry") or {}
+        self.assertEqual(geom.get("type"), "FeatureCollection")
+        self.assertEqual(len(geom.get("features") or []), 1)
+        self.assertEqual(geom["features"][0]["geometry"]["type"], "Polygon")
+        self.assertIsInstance(body.get("impact_bbox"), list)
         missing = self.client.get("/v1/storms/nope")
         self.assertEqual(missing.status_code, 404)
 

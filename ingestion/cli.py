@@ -14,6 +14,8 @@ from ingestion.corridor_backfill import (
 )
 from api.config.corridors import list_corridor_ids
 from api.config.hydrology_measures import mapped_corridor_measures
+from api.config.place_bboxes import list_place_ids
+from ingestion.lidar_dtm import ingest_place_dtm
 try:
     from ingestion.clients.ea import EAClient  # type: ignore
 except Exception:
@@ -714,7 +716,49 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument("--tolerance", type=float, default=0.0005)
     pc.set_defaults(func=cmd_curate_polygons)
 
+    pld = sub.add_parser(
+        "ingest-lidar-dtm",
+        help="download DEFRA LiDAR Composite DTM tiles for a place bbox (WCS)",
+    )
+    pld.add_argument("--place", required=True, choices=list_place_ids())
+    pld.add_argument("--resolution", choices=["1m", "2m"], default="2m")
+    pld.add_argument(
+        "--extent",
+        choices=["core", "full"],
+        default="core",
+        help="core=~10km Muchelney window; full=storm-footprint envelope",
+    )
+    pld.add_argument("--tile-m", type=float, default=5000.0)
+    pld.add_argument("--out-root", default="data/curated/lidar")
+    pld.add_argument("--resume", action="store_true", help="skip existing GeoTIFF tiles")
+    pld.set_defaults(func=cmd_ingest_lidar_dtm)
+
     return p
+
+
+def cmd_ingest_lidar_dtm(args: argparse.Namespace) -> None:
+    prov = ingest_place_dtm(
+        args.place,
+        resolution=args.resolution,
+        extent=args.extent,
+        tile_m=args.tile_m,
+        out_root=args.out_root,
+        resume=bool(args.resume),
+    )
+    print(prov["provenance_path"])
+    print(
+        json.dumps(
+            {
+                "tiles": len(prov.get("tiles") or []),
+                "skipped": len(prov.get("skipped") or []),
+                "errors": len(prov.get("errors") or []),
+                "bbox_bng": prov.get("bbox_bng"),
+                "resolution_m": prov.get("resolution_m"),
+            }
+        )
+    )
+    if prov.get("errors"):
+        raise SystemExit(1)
 
 def main() -> None:
     parser = build_parser()
