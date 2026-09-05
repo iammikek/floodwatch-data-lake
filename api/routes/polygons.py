@@ -14,6 +14,8 @@ from api.services.polygons import (
     prepare_inline_features,
     resolve_curated_polygons_path,
     curated_polygons_path,
+    _GEOJSON_CACHE,
+    _remote_base,
 )
 from api.utils.cache import cache_get, cache_set
 from api.deps import rate_limiter, polygons_ttl
@@ -32,10 +34,65 @@ def get_polygons(
     rl: Dict[str, int] = Depends(rate_limiter),
 ):
     path, resolved_format = resolve_curated_polygons_path(dataset, region, scenario, format_)
+    # Reject oversized inline bboxes before loading GeoJSON (can be 100MB+).
+    if inline:
+        if not bbox:
+            raise HTTPException(status_code=400, detail="bbox is required when inline=true")
+        w, s, e, n = parse_bbox(bbox)
+        if not bbox_small(w, s, e, n):
+            raise HTTPException(status_code=400, detail="bbox too large for inline response")
+        key = f"poly:inline:v2:{dataset}:{region}:{scenario}:{resolved_format}:{bbox}"
+        cached = cache_get(key)
+        if cached is not None:
+            result = {
+                "region_id": region,
+                "dataset": dataset,
+                "scenario": scenario,
+                "format": resolved_format,
+                "path": path,
+                "count": cached["count"],
+                "data": cached["data"],
+            }
+            etag = f"W/{hash((path, bbox, result['count']))}"
+            ttl = polygons_ttl()
+            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+            return JSONResponse(content=result, headers=headers)
+        try:
+            doc = read_geojson_any(path)
+            feats = doc.get("features") or []
+            filtered = prepare_inline_features(feats if isinstance(feats, list) else [], [w, s, e, n])
+            payload = {"type": "FeatureCollection", "features": filtered}
+            result = {
+                "region_id": region,
+                "dataset": dataset,
+                "scenario": scenario,
+                "format": resolved_format,
+                "path": path,
+                "count": len(filtered),
+                "data": payload,
+            }
+            ttl = polygons_ttl()
+            cache_set(key, {"data": payload, "count": len(filtered)}, ttl=ttl)
+            etag = f"W/{hash((path, bbox, len(filtered)))}"
+            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
+            return JSONResponse(content=result, headers=headers)
+        except Exception:
+            raise HTTPException(status_code=500, detail="failed to build inline response")
+
     try:
-        data = read_geojson_any(path)
-        feats = data.get("features") or []
-        cnt = len(feats) if isinstance(feats, list) else 0
+        if not os.path.exists(path) and not _remote_base():
+            raise FileNotFoundError(path)
+        # Avoid parsing 100MB+ GeoJSON just for metadata; count is approximate (-1 = unknown).
+        cached = _GEOJSON_CACHE.get(path)
+        if cached is not None:
+            feats = cached[1].get("features") or []
+            cnt = len(feats) if isinstance(feats, list) else 0
+        elif os.path.exists(path):
+            cnt = -1
+        else:
+            data = read_geojson_any(path)
+            feats = data.get("features") or []
+            cnt = len(feats) if isinstance(feats, list) else 0
     except Exception:
         raise HTTPException(status_code=404, detail="curated polygons not found")
     result: Dict[str, Any] = {
@@ -46,36 +103,6 @@ def get_polygons(
         "path": path,
         "count": cnt,
     }
-    if inline:
-        if not bbox:
-            raise HTTPException(status_code=400, detail="bbox is required when inline=true")
-        w, s, e, n = parse_bbox(bbox)
-        if not bbox_small(w, s, e, n):
-            raise HTTPException(status_code=400, detail="bbox too large for inline response")
-        key = f"poly:inline:v2:{dataset}:{region}:{scenario}:{resolved_format}:{bbox}"
-        cached = cache_get(key)
-        if cached is not None:
-            result["data"] = cached["data"]
-            result["count"] = cached["count"]
-            etag = f"W/{hash((path, bbox, result['count']))}"
-            ttl = polygons_ttl()
-            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
-            return JSONResponse(content=result, headers=headers)
-        try:
-            doc = read_geojson_any(path)
-            feats = doc.get("features") or []
-            target = [w, s, e, n]
-            filtered = prepare_inline_features(feats if isinstance(feats, list) else [], target)
-            payload = {"type": "FeatureCollection", "features": filtered}
-            result["data"] = payload
-            result["count"] = len(filtered)
-            ttl = polygons_ttl()
-            cache_set(key, {"data": payload, "count": len(filtered)}, ttl=ttl)
-            etag = f"W/{hash((path, bbox, len(filtered)))}"
-            headers = {"ETag": etag, "Cache-Control": f"public, max-age={ttl}", "X-RateLimit-Limit": str(rl["limit"]), "X-RateLimit-Remaining": str(rl["remaining"]), "X-RateLimit-Reset": str(rl["reset"])}
-            return JSONResponse(content=result, headers=headers)
-        except Exception:
-            raise HTTPException(status_code=500, detail="failed to build inline response")
     # metadata-only response
     etag = f"W/{hash((path, result['count']))}"
     ttl = polygons_ttl()

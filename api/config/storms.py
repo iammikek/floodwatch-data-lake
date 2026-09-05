@@ -2,6 +2,10 @@
 
 Timestamps are UTC evaluation instants for predict_corridor(now=...).
 Entries with as_of are replayable; place history surfaces the full set.
+
+impact_bbox is a curated approximate footprint (west,south,east,north) for
+map flood-bound clipping during replay — not modelled inundation.
+bounds_mode "none" means show no flood-bound overlay for that event.
 """
 
 from __future__ import annotations
@@ -20,6 +24,9 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "major_flood",
         "severity": "high",
         "impact_summary": "Muchelney cut off for weeks; A361 approaches flooded.",
+        "bounds_mode": "impact",
+        # Wide Levels inundation at peak isolation.
+        "impact_bbox": [-2.98, 51.02, -2.68, 51.22],
         "notes": (
             "Somerset Levels winter flooding; Muchelney isolation peaked mid-February. "
             "as_of is the mid-event evaluation instant (not early January onset)."
@@ -36,6 +43,8 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "major_flood",
         "severity": "high",
         "impact_summary": "Parrett catchment climbing; lanes starting to flood.",
+        "bounds_mode": "impact",
+        "impact_bbox": [-2.90, 51.08, -2.74, 51.16],
         "notes": "Onset of the 2013–14 Levels emergency, before peak isolation.",
     },
     {
@@ -49,6 +58,8 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "wet_spell",
         "severity": "medium",
         "impact_summary": "Saturated Levels; local road flooding risk elevated.",
+        "bounds_mode": "impact",
+        "impact_bbox": [-2.88, 51.09, -2.76, 51.15],
         "notes": "Pre-winter wet period used as a secondary place-history marker.",
     },
     {
@@ -62,6 +73,8 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "named_storm",
         "severity": "high",
         "impact_summary": "Named storm; Parrett corridor under pressure before Dennis.",
+        "bounds_mode": "impact",
+        "impact_bbox": [-2.92, 51.06, -2.72, 51.18],
         "notes": "Storm Ciara weekend; Dennis followed a week later.",
     },
     {
@@ -75,6 +88,8 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "named_storm",
         "severity": "high",
         "impact_summary": "Named-storm peak; corridor hindcast golden eval.",
+        "bounds_mode": "impact",
+        "impact_bbox": [-2.95, 51.04, -2.70, 51.20],
         "notes": "Named storm window used for golden analogue eval.",
     },
     {
@@ -88,6 +103,8 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "wet_spell",
         "severity": "medium",
         "impact_summary": "Winter wet spell on the Levels; monitoring window.",
+        "bounds_mode": "impact",
+        "impact_bbox": [-2.87, 51.10, -2.77, 51.14],
         "notes": "More recent archive check for place history coverage.",
     },
     {
@@ -101,6 +118,8 @@ STORMS: List[Dict[str, Any]] = [
         "kind": "control",
         "severity": "low",
         "impact_summary": "Low-flow control — no predicted place impact.",
+        "bounds_mode": "none",
+        "impact_bbox": None,
         "notes": "Low-flow control window; expected clear / no impact analogues.",
     },
 ]
