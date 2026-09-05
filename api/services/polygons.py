@@ -27,10 +27,19 @@ def _remote_base() -> Optional[str]:
         return base.rstrip("/")
     return None
 
+_GEOJSON_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+
+
 def read_geojson_any(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
+        mtime = os.path.getmtime(path)
+        cached = _GEOJSON_CACHE.get(path)
+        if cached and cached[0] == mtime:
+            return cached[1]
         with open(path, "r") as f:
-            return json.load(f)
+            doc = json.load(f)
+        _GEOJSON_CACHE[path] = (mtime, doc)
+        return doc
     base = _remote_base()
     if not base:
         return {"type": "FeatureCollection", "features": []}
@@ -201,14 +210,17 @@ def resolve_curated_polygons_path(
     scenario: Optional[str],
     format_: str,
 ) -> tuple[str, str]:
-    """Prefer requested format; fall back to normalized when simplified is empty/missing."""
+    """Prefer requested format; fall back to normalized when simplified is empty/missing.
+
+    Uses file presence/size only — does not parse multi‑hundred‑MB GeoJSON.
+    """
     primary = curated_polygons_path(dataset, region, scenario, format_)
-    doc = read_geojson_any(primary)
-    feats = doc.get("features") or []
-    if isinstance(feats, list) and len(feats) > 0:
+    if os.path.exists(primary) and os.path.getsize(primary) > 64:
         return primary, format_
     if format_ == "simplified":
         fallback = curated_polygons_path(dataset, region, scenario, "normalized")
+        if os.path.exists(fallback) and os.path.getsize(fallback) > 64:
+            return fallback, "normalized"
         return fallback, "normalized"
     return primary, format_
 

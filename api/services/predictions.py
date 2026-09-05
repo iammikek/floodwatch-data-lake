@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right, insort
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from math import sqrt
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -184,6 +186,38 @@ def _percentile_rank(values: Sequence[float], value: float) -> float:
     return round(100.0 * below / len(values), 2)
 
 
+def _percentile_rank_sorted(sorted_vals: Sequence[float], value: float) -> float:
+    if not sorted_vals:
+        return 0.0
+    below = bisect_right(sorted_vals, value)
+    return round(100.0 * below / len(sorted_vals), 2)
+
+
+@dataclass(frozen=True)
+class _SeriesIndex:
+    pts: Sequence[SeriesPoint]
+    times: List[datetime]
+    values: List[float]
+    index_by_time: Dict[datetime, int]
+    sorted_values: List[float]
+    min_v: float
+    max_v: float
+
+
+def _index_series(pts: Sequence[SeriesPoint]) -> _SeriesIndex:
+    times = [p.t for p in pts]
+    values = [float(p.value) for p in pts]
+    return _SeriesIndex(
+        pts=pts,
+        times=times,
+        values=values,
+        index_by_time={t: i for i, t in enumerate(times)},
+        sorted_values=sorted(values),
+        min_v=min(values) if values else 0.0,
+        max_v=max(values) if values else 0.0,
+    )
+
+
 def _window_end_candidates(
     series_by_measure: Dict[str, Sequence[SeriesPoint]],
     measure_ids: Sequence[str],
@@ -210,6 +244,19 @@ def _window_points(pts: Sequence[SeriesPoint], end: datetime, window_hours: int)
     return window if len(window) == window_hours else []
 
 
+def _window_points_indexed(
+    index: _SeriesIndex, end: datetime, window_hours: int
+) -> List[SeriesPoint]:
+    idx = index.index_by_time.get(end)
+    if idx is None or idx + 1 < window_hours:
+        return []
+    start_idx = idx - window_hours + 1
+    expected_start = end - timedelta(hours=window_hours - 1)
+    if index.times[start_idx] == expected_start:
+        return list(index.pts[start_idx : idx + 1])
+    return _window_points(index.pts, end, window_hours)
+
+
 def _values_by_measure(
     series_by_measure: Dict[str, Sequence[SeriesPoint]],
     measure_ids: Sequence[str],
@@ -233,6 +280,28 @@ def _fingerprint_for_window(
         vector.extend(_percentile_rank(vals, p.value) / 100.0 for p in pts[-12:])
         base = pts[0].value
         hist_span = max(vals) - min(vals) if vals else 0.0
+        scale = hist_span if hist_span > 0.05 else 0.05
+        vector.extend(round((p.value - base) / scale, 4) for p in pts[-12:])
+        slope = _slope_per_hour(pts[-6:])
+        vector.append(0.0 if slope is None else round(slope, 4))
+    return vector
+
+
+def _fingerprint_for_window_indexed(
+    indexes: Dict[str, _SeriesIndex],
+    measure_ids: Sequence[str],
+    end: datetime,
+    window_hours: int,
+) -> Optional[List[float]]:
+    vector: List[float] = []
+    for measure_id in measure_ids:
+        index = indexes[measure_id]
+        pts = _window_points_indexed(index, end, window_hours)
+        if len(pts) != window_hours:
+            return None
+        vector.extend(_percentile_rank_sorted(index.sorted_values, p.value) / 100.0 for p in pts[-12:])
+        base = pts[0].value
+        hist_span = index.max_v - index.min_v
         scale = hist_span if hist_span > 0.05 else 0.05
         vector.extend(round((p.value - base) / scale, 4) for p in pts[-12:])
         slope = _slope_per_hour(pts[-6:])
@@ -272,6 +341,40 @@ def _outcome_for_analogue(
     ]
     first_watch = None
     for p in future:
+        rise = p.value - baseline
+        hours = (p.t - end).total_seconds() / 3600.0
+        if p.value >= p95 or rise >= impact_delta:
+            return ("impact", round(hours, 1))
+        if first_watch is None and (p.value >= p90 or rise >= watch_delta):
+            first_watch = round(hours, 1)
+    if first_watch is not None:
+        return ("watch", first_watch)
+    return ("clear", None)
+
+
+def _outcome_for_analogue_indexed(
+    primary: _SeriesIndex,
+    end: datetime,
+    history_sorted: Sequence[float],
+    *,
+    horizon_hours: int,
+    impact_delta: float,
+    watch_delta: float,
+) -> Tuple[str, Optional[float]]:
+    analogue_window = _window_points_indexed(primary, end, 24)
+    if not analogue_window:
+        return ("clear", None)
+    baseline = analogue_window[-1].value
+    p90 = _percentile(history_sorted, 90) if history_sorted else baseline
+    p95 = _percentile(history_sorted, 95) if history_sorted else baseline
+    end_idx = primary.index_by_time.get(end)
+    if end_idx is None:
+        return ("clear", None)
+    horizon_end = end + timedelta(hours=horizon_hours)
+    first_watch = None
+    for p in primary.pts[end_idx + 1 :]:
+        if p.t > horizon_end:
+            break
         rise = p.value - baseline
         hours = (p.t - end).total_seconds() / 3600.0
         if p.value >= p95 or rise >= impact_delta:
@@ -412,27 +515,35 @@ def _build_analogue_rows(
     measure_ids = _analogue_measure_ids(corridor, series_by_measure)
     if not measure_ids:
         return []
-    values_by_measure = _values_by_measure(series_by_measure, measure_ids)
-    latest_times = [series_by_measure[measure_id][-1].t for measure_id in measure_ids]
+    indexes = {
+        measure_id: _index_series(series_by_measure[measure_id]) for measure_id in measure_ids
+    }
+    latest_times = [indexes[measure_id].times[-1] for measure_id in measure_ids]
     current_end = min(latest_times)
-    current_fp = _fingerprint_for_window(series_by_measure, values_by_measure, measure_ids, current_end, window_hours)
+    current_fp = _fingerprint_for_window_indexed(indexes, measure_ids, current_end, window_hours)
     if not current_fp:
         return []
 
-    primary_series = series_by_measure[measure_ids[0]]
+    primary = indexes[measure_ids[0]]
     candidate_cutoff = current_end - timedelta(hours=min_gap_hours)
     candidates = _window_end_candidates(series_by_measure, measure_ids, candidate_cutoff, horizon_hours)
     rows: List[Dict[str, Any]] = []
+    history_sorted: List[float] = []
+    hist_i = 0
     for end in candidates:
-        fp = _fingerprint_for_window(series_by_measure, values_by_measure, measure_ids, end, window_hours)
+        while hist_i < len(primary.pts) and primary.pts[hist_i].t <= end:
+            insort(history_sorted, primary.values[hist_i])
+            hist_i += 1
+        fp = _fingerprint_for_window_indexed(indexes, measure_ids, end, window_hours)
         if not fp:
             continue
         similarity = round(_cosine_similarity(current_fp, fp), 4)
         if similarity < min_similarity:
             continue
-        outcome, tti = _outcome_for_analogue(
-            primary_series,
+        outcome, tti = _outcome_for_analogue_indexed(
+            primary,
             end,
+            history_sorted,
             horizon_hours=horizon_hours,
             impact_delta=0.35,
             watch_delta=0.2,
