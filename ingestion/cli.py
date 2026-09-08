@@ -724,9 +724,12 @@ def build_parser() -> argparse.ArgumentParser:
     pld.add_argument("--resolution", choices=["1m", "2m"], default="2m")
     pld.add_argument(
         "--extent",
-        choices=["core", "full"],
+        choices=["core", "full", "hotspot"],
         default="core",
-        help="core=~10km Muchelney window; full=storm-footprint envelope",
+        help=(
+            "core=~10km Muchelney window; full=storm-footprint envelope; "
+            "hotspot=A361 East Lyng/Othery strip for 1m / HiPIMS prep"
+        ),
     )
     pld.add_argument("--tile-m", type=float, default=5000.0)
     pld.add_argument("--out-root", default="data/curated/lidar")

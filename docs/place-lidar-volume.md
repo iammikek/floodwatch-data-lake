@@ -26,8 +26,11 @@ Configured in [`api/config/place_bboxes.py`](../api/config/place_bboxes.py):
 Source: **LIDAR Composite DTM** via WCS GetCoverage (no auth).
 
 ```bash
-# Core Muchelney window at 2 m (recommended default)
+# Core Muchelney window at 2 m (recommended default / wide bathtub)
 python -m ingestion.cli ingest-lidar-dtm --place a361-muchelney --resolution 2m --extent core --resume
+
+# A361 hotspot at 1 m (finer DEM / HiPIMS prep — smaller download)
+python -m ingestion.cli ingest-lidar-dtm --place a361-muchelney --resolution 1m --extent hotspot --resume
 
 # Full storm-envelope window (more tiles / larger download)
 python -m ingestion.cli ingest-lidar-dtm --place a361-muchelney --resolution 2m --extent full --resume
@@ -36,20 +39,21 @@ python -m ingestion.cli ingest-lidar-dtm --place a361-muchelney --resolution 2m 
 Outputs (gitignored under `data/`):
 
 - `data/curated/lidar/a361-muchelney/dtm-2m/*.tif` — BNG tiles (~5 km)
-- `data/curated/lidar/a361-muchelney/dtm-2m/provenance.json` — product id, bbox, attribution, tile list
+- `data/curated/lidar/a361-muchelney/dtm-1m/*.tif` — hotspot (or core) 1 m tiles
+- `…/provenance.json` — product id, bbox, attribution, tile list
 
 Attribution: © Environment Agency copyright and/or database right 2022. LIDAR Composite DTM.
 
 ### Notes
 
 - Native CRS is **EPSG:27700** (`subset=E(...)` / `subset=N(...)`).
-- Prefer **2 m** for corridor-scale volume v0; 1 m is available but heavier.
+- Prefer **2 m** for storm-wide bathtub; ingest **1 m hotspot** for A361 strip / HiPIMS prep. `resolution=auto` only upgrades to 1 m when coverage looks core-sized (≥6 tiles); pass `resolution=1m` to force hotspot DEM.
 - Ingest writes **tiles**, not a single mosaic. Volume reads overlapping tiles via rasterio.
 - Event outlines remain hand-curated v0 polygons (`api/config/storm_extents.py`) — not surveyed inundation.
 
 ## Volume v0 → v1 (gauge rise + road strip)
 
-**API:** `GET /v1/storms/{storm_id}/volume?place=a361-muchelney&resolution=2m`
+**API:** `GET /v1/storms/{storm_id}/volume?place=a361-muchelney&resolution=auto`
 
 **Schema:** `floodwatch.storm_volume.v1`
 
@@ -70,7 +74,7 @@ Attribution: © Environment Agency copyright and/or database right 2022. LIDAR C
 
 Summer control (`bounds_mode: none`) returns `available: false` / `reason: no_impact_geometry`.
 
-HiPIMS / depth-over-road hydrodynamic modelling remains deferred.
+HiPIMS / depth-over-road hydrodynamic modelling remains deferred; DEM prep is documented in [hipims-prep.md](hipims-prep.md).
 
 ## Accuracy checklist (extents → DEM → volume)
 

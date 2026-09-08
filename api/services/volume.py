@@ -103,6 +103,34 @@ def list_dtm_tiles(
     )
 
 
+def resolve_dtm_resolution(
+    place_id: str,
+    requested: str = "auto",
+    *,
+    dtm_root: str = DEFAULT_DTM_ROOT,
+) -> str:
+    """Pick a DTM folder: explicit 1m/2m, or auto.
+
+    Auto prefers 1 m only when coverage looks core-sized (≥6 tiles) or when
+    2 m is missing. A 1 m A361 hotspot alone must not replace 2 m for
+    storm-wide bathtub volume (would undercount outside the strip).
+    """
+    req = (requested or "auto").strip().lower()
+    if req in ("1m", "2m"):
+        return req
+    if req not in ("auto", ""):
+        raise ValueError(f"unsupported DTM resolution '{requested}'")
+    tiles_1m = list_dtm_tiles(place_id, resolution="1m", dtm_root=dtm_root)
+    tiles_2m = list_dtm_tiles(place_id, resolution="2m", dtm_root=dtm_root)
+    if tiles_1m and (not tiles_2m or len(tiles_1m) >= 6):
+        return "1m"
+    if tiles_2m:
+        return "2m"
+    if tiles_1m:
+        return "1m"
+    return "2m"
+
+
 def _fill_percentile(severity: Optional[str]) -> float:
     key = str(severity or "").lower()
     return float(SEVERITY_FILL_PERCENTILE.get(key, DEFAULT_FILL_PERCENTILE))
@@ -455,7 +483,7 @@ def estimate_storm_volume(
     storm_id: str,
     *,
     place_id: Optional[str] = None,
-    resolution: str = "2m",
+    resolution: str = "auto",
     dtm_root: str = DEFAULT_DTM_ROOT,
     fill_percentile: Optional[float] = None,
     water_surface_m: Optional[float] = None,
@@ -470,6 +498,11 @@ def estimate_storm_volume(
     place = place_id or corridor
     if not place:
         raise ValueError("place_id required")
+
+    requested_resolution = resolution
+    resolution = resolve_dtm_resolution(
+        place, requested_resolution, dtm_root=dtm_root
+    )
 
     ring_wgs = _ring_from_storm(storm)
     if not ring_wgs:
@@ -609,6 +642,8 @@ def estimate_storm_volume(
             "impact_geometry",
             f"lidar_composite_dtm_{resolution}",
         ],
+        "resolution": resolution,
+        "resolutionRequested": requested_resolution,
         "notes": notes,
         "attribution": (
             "© Environment Agency copyright and/or database right 2022. "
@@ -659,6 +694,7 @@ def estimate_storm_volume(
             "cellAreaM2": cell_area,
             "tilesUsed": used_tiles,
             "resolution": resolution,
+            "resolutionRequested": requested_resolution,
             "surfaceMode": mode,
             "gauge": method.get("gauge"),
         },

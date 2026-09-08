@@ -10,7 +10,8 @@ Place accuracy work serves **historical analysis**, not the live monitor.
 | 4. Volume v0 | ✅ | Outline × DEM bathtub; History panel |
 | 4b. Gauge-linked rise + A361 strip | ✅ | Great Bow peak−summer rise; road centreline depths |
 | 4c. Historic flood warnings (AfA435) | ✅ | Curated issue rows on Chandra; `GET /v1/storms/{id}/warnings` |
-| 5. HiPIMS / depth-over-road | Deferred | After extents + DEM prove useful |
+| 5a. Finer DEM (1 m hotspot) | ✅ | A361 hotspot ingest; volume `resolution=1m` / auto when core-sized |
+| 5b. HiPIMS / depth-over-road | Deferred | DEM contract in `docs/hipims-prep.md`; solver not wired |
 
 ## Extents → DEM → volume checklist
 
@@ -47,6 +48,15 @@ Use this when adding a place or storm:
 - [ ] `GET /v1/storms/{id}/warnings` returns items + counts (or `available: false`)
 - [ ] Notes call out issue-date semantics and known archive gaps (e.g. 112FWFEAS10A in 2026)
 - [ ] Flood Watch History mounts Historic flood warnings panel (not live warnings layer)
+
+### Finer DEM / HiPIMS prep
+
+- [ ] `bng_hotspot` defined for A361 East Lyng / Othery strip
+- [ ] `ingest-lidar-dtm --resolution 1m --extent hotspot` documented and runnable
+- [ ] Volume `resolution=auto` uses 1 m only when coverage looks core-sized; hotspot-only keeps 2 m
+- [ ] `GET /v1/places/{id}/dem` reports tile counts + HiPIMS pilot (`dem_prep`)
+- [ ] History volume panel shows DEM resolution used
+- [ ] Full HiPIMS-CUDA job API remains deferred (`docs/hipims-prep.md`)
 
 ## What we do not do
 
