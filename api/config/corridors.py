@@ -10,17 +10,36 @@ CORRIDORS: Dict[str, Dict[str, Any]] = {
         "id": "a361-muchelney",
         "label": "A361 Muchelney corridor",
         "region": "SOM",
-        # Longest local history on Parrett approach — used for percentile / slope.
+        # Prefer Great Bow for hindcast primary / outcome scoring.
+        # 2026 Gaw Bridge live FM sits on a different scale (~1–3 m) than the
+        # Thorney Mill hydrology proxy archive (~9–10 mASD) in the same folder.
         "primary": {
-            "measure_id": "52119-level-stage-i-15_min-mASD",
-            "label": "Gaw Bridge · River Parrett",
-            "role": "parrett_upstream",
+            "measure_id": "52230-level-stage-i-15_min-m",
+            "label": "Langport Great Bow",
+            "role": "levels_free_surface_proxy",
         },
         "gauges": [
+            {
+                "measure_id": "52230-level-stage-i-15_min-m",
+                "label": "Langport Great Bow",
+                "ref": "gauge-langport",
+            },
+            {
+                "measure_id": "52245-level-stage-i-15_min-m",
+                "label": "Westonzoyland PS",
+                "ref": "gauge-westonzoyland",
+            },
             {
                 "measure_id": "52119-level-stage-i-15_min-mASD",
                 "label": "Gaw Bridge · River Parrett",
                 "ref": "gauge-gaw-bridge",
+                "optional": True,
+                "exclude_from_analogue": True,
+                "note": (
+                    "Kept for observables / map context only. Exclude from "
+                    "analogue fingerprints until 2026 FM vs Thorney Mill proxy "
+                    "scale is reconciled."
+                ),
             },
             {
                 "measure_id": "52153-level-stage-i-15_min-mASD",
@@ -32,16 +51,6 @@ CORRIDORS: Dict[str, Dict[str, Any]] = {
                     "Optional until a long-retention hydrology series exists "
                     "(Midelney Lock archive only from Aug 2022)."
                 ),
-            },
-            {
-                "measure_id": "52245-level-stage-i-15_min-m",
-                "label": "Westonzoyland PS",
-                "ref": "gauge-westonzoyland",
-            },
-            {
-                "measure_id": "52230-level-stage-i-15_min-m",
-                "label": "Langport Great Bow",
-                "ref": "gauge-langport",
             },
         ],
         "affected_areas": [

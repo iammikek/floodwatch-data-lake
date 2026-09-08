@@ -19,6 +19,12 @@ def _pts(values, start: datetime) -> List[SeriesPoint]:
     return out
 
 
+PRIMARY_ID = "52230-level-stage-i-15_min-m"
+GAW_ID = "52119-level-stage-i-15_min-mASD"
+MIDELNEY_ID = "52153-level-stage-i-15_min-mASD"
+WESTON_ID = "52245-level-stage-i-15_min-m"
+
+
 class AnalyseSeriesTests(unittest.TestCase):
     def test_rising_toward_high(self):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -47,10 +53,10 @@ class PredictCorridorTests(unittest.TestCase):
 
         def loader(measure_id, from_, to, aggregate="hour"):
             analogues = {
-                "52119-level-stage-i-15_min-mASD": [1.05, 1.1, 1.2, 1.3, 1.42, 1.55],
-                "52153-level-stage-i-15_min-mASD": [0.92, 0.96, 1.02, 1.08, 1.16, 1.24],
-                "52245-level-stage-i-15_min-m": [0.84, 0.88, 0.95, 1.02, 1.1, 1.18],
-                "52230-level-stage-i-15_min-m": [0.75, 0.79, 0.84, 0.9, 0.97, 1.05],
+                PRIMARY_ID: [0.75, 0.79, 0.84, 0.9, 0.97, 1.05],
+                MIDELNEY_ID: [0.92, 0.96, 1.02, 1.08, 1.16, 1.24],
+                WESTON_ID: [0.84, 0.88, 0.95, 1.02, 1.1, 1.18],
+                GAW_ID: [1.05, 1.1, 1.2, 1.3, 1.42, 1.55],
             }
             outcome_tail = [1.8, 1.92, 2.05, 2.2, 2.3, 2.42]
             tail = analogues[measure_id]
@@ -68,7 +74,9 @@ class PredictCorridorTests(unittest.TestCase):
         self.assertIn(doc["prediction"]["verdict"], ("watch", "at_risk", "clear"))
         self.assertTrue(doc["drivers"])
         self.assertIn("gaugeSeries", doc["observables"])
-        self.assertIn("gauge-gaw-bridge", doc["observables"]["gaugeSeries"])
+        self.assertEqual(doc["observables"]["keyGaugeId"], "gauge-langport")
+        self.assertEqual(doc["observables"]["primaryMeasureId"], PRIMARY_ID)
+        self.assertIn("gauge-langport", doc["observables"]["gaugeSeries"])
         self.assertEqual(doc["method"]["name"], "historic_analogue_v1")
         self.assertTrue(any(d["type"] == "analogue_consensus" for d in doc["drivers"]))
 
@@ -91,12 +99,12 @@ class PredictCorridorTests(unittest.TestCase):
 
         def loader(measure_id, from_, to, aggregate="hour"):
             current_patterns = {
-                "52119-level-stage-i-15_min-mASD": [1.0] * 18 + [1.02, 1.05, 1.1, 1.16, 1.22, 1.28],
-                "52153-level-stage-i-15_min-mASD": [0.92] * 18 + [0.95, 0.98, 1.01, 1.05, 1.08, 1.11],
-                "52245-level-stage-i-15_min-m": [0.85] * 18 + [0.87, 0.9, 0.94, 0.98, 1.01, 1.04],
-                "52230-level-stage-i-15_min-m": [0.75] * 18 + [0.77, 0.8, 0.83, 0.86, 0.89, 0.92],
+                PRIMARY_ID: [0.75] * 18 + [0.77, 0.8, 0.83, 0.86, 0.89, 0.92],
+                MIDELNEY_ID: [0.92] * 18 + [0.95, 0.98, 1.01, 1.05, 1.08, 1.11],
+                WESTON_ID: [0.85] * 18 + [0.87, 0.9, 0.94, 0.98, 1.01, 1.04],
+                GAW_ID: [2.0] * 24,  # scale-broken noise — must not kill fingerprints
             }
-            if measure_id == "52119-level-stage-i-15_min-mASD":
+            if measure_id == PRIMARY_ID:
                 history = (
                     [1.0] * 36
                     + current_patterns[measure_id]
@@ -107,6 +115,8 @@ class PredictCorridorTests(unittest.TestCase):
                     + [0.96] * 18
                     + current_patterns[measure_id]
                 )
+            elif measure_id == GAW_ID:
+                history = current_patterns[GAW_ID] * 8
             else:
                 history = (
                     [0.9] * 36
@@ -122,21 +132,22 @@ class PredictCorridorTests(unittest.TestCase):
         self.assertIn(doc["prediction"]["verdict"], ("watch", "at_risk"))
         self.assertFalse(doc["dispatch"]["safeToPass"])
         self.assertTrue(any(d["type"] == "historic_analogue" for d in doc["drivers"]))
+        self.assertEqual(doc["drivers"][0]["ref"], PRIMARY_ID)
 
     def test_predict_skips_optional_gauge_without_series(self):
         start = datetime(2026, 6, 1, tzinfo=timezone.utc)
         now = start + timedelta(hours=100)
 
         def loader(measure_id, from_, to, aggregate="hour"):
-            if measure_id == "52153-level-stage-i-15_min-mASD":
+            if measure_id == MIDELNEY_ID:
                 return []
             current_patterns = {
-                "52119-level-stage-i-15_min-mASD": [1.0] * 18 + [1.02, 1.05, 1.1, 1.16, 1.22, 1.28],
-                "52245-level-stage-i-15_min-m": [0.85] * 18 + [0.87, 0.9, 0.94, 0.98, 1.01, 1.04],
-                "52230-level-stage-i-15_min-m": [0.75] * 18 + [0.77, 0.8, 0.83, 0.86, 0.89, 0.92],
+                PRIMARY_ID: [0.75] * 18 + [0.77, 0.8, 0.83, 0.86, 0.89, 0.92],
+                WESTON_ID: [0.85] * 18 + [0.87, 0.9, 0.94, 0.98, 1.01, 1.04],
+                GAW_ID: [1.0] * 24,
             }
             pattern = current_patterns[measure_id]
-            if measure_id == "52119-level-stage-i-15_min-mASD":
+            if measure_id == PRIMARY_ID:
                 history = (
                     [1.0] * 36
                     + pattern
@@ -147,6 +158,8 @@ class PredictCorridorTests(unittest.TestCase):
                     + [0.96] * 18
                     + pattern
                 )
+            elif measure_id == GAW_ID:
+                history = pattern * 8
             else:
                 history = (
                     [0.9] * 36
@@ -159,9 +172,10 @@ class PredictCorridorTests(unittest.TestCase):
             return _pts(history, start)
 
         doc = predict_corridor("a361-muchelney", history_days=30, now=now, series_loader=loader)
-        self.assertEqual(doc["method"]["parameters"]["activeGauges"], 3)
+        # Great Bow + Westonzoyland only (Gaw excluded from analogue; Midelney empty)
+        self.assertEqual(doc["method"]["parameters"]["activeGauges"], 2)
         self.assertTrue(any(d["type"] == "historic_analogue" for d in doc["drivers"]))
-        midelney = next(d for d in doc["drivers"] if d.get("ref") == "52153-level-stage-i-15_min-mASD")
+        midelney = next(d for d in doc["drivers"] if d.get("ref") == MIDELNEY_ID)
         self.assertEqual(midelney["signal"], "no_data")
 
     def test_unknown_corridor(self):

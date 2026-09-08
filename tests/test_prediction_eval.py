@@ -36,19 +36,23 @@ def _make_loader(
 ):
     """Return a series_loader compatible with predict_corridor.
 
-    primary_history   → used for Gaw Bridge (52119)
-    secondary_history → used for the other three gauges (scaled slightly)
+    primary_history   → Langport Great Bow (52230) — hindcast primary
+    secondary_history → other gauges (scaled); Gaw is exclude_from_analogue
     """
     scales = {
-        "52119-level-stage-i-15_min-mASD": 1.0,
-        "52153-level-stage-i-15_min-mASD": 0.88,
+        "52230-level-stage-i-15_min-m": 1.0,
         "52245-level-stage-i-15_min-m": 0.82,
-        "52230-level-stage-i-15_min-m": 0.76,
+        "52153-level-stage-i-15_min-mASD": 0.88,
+        "52119-level-stage-i-15_min-mASD": 0.95,
     }
 
     def loader(measure_id, from_, to, aggregate="hour"):
         scale = scales.get(measure_id, 1.0)
-        base = primary_history if measure_id == "52119-level-stage-i-15_min-mASD" else secondary_history
+        base = (
+            primary_history
+            if measure_id == "52230-level-stage-i-15_min-m"
+            else secondary_history
+        )
         return _pts([round(v * scale, 4) for v in base], start)
 
     return loader

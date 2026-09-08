@@ -529,8 +529,8 @@ paths:
                       summary: "Historic EA matches indicate likely corridor disruption within the next day."
                     drivers:
                       - type: "gauge_trajectory"
-                        ref: "52119-level-stage-i-15_min-mASD"
-                        label: "Gaw Bridge · River Parrett"
+                        ref: "52230-level-stage-i-15_min-m"
+                        label: "Langport Great Bow"
                         signal: "rising_toward_high"
                         level: 2.24
                         pct_rank: 91.2
@@ -565,11 +565,11 @@ paths:
                       notes: "Matches current multi-gauge shape to past EA windows. Not a rainfall-lag or depth model; confidence reflects analogue agreement."
                     observables:
                       seriesStart: "2026-09-03T01:00:00Z"
-                      keyGaugeId: "gauge-gaw-bridge"
+                      keyGaugeId: "gauge-langport"
                       rainfallUpstreamMm: []
                       gaugeSeries:
-                        gauge-gaw-bridge: [1.82, 1.86, 1.9, 1.94, 2.0, 2.05, 2.1, 2.14, 2.17, 2.2, 2.22, 2.24]
-                      primaryMeasureId: "52119-level-stage-i-15_min-mASD"
+                        gauge-langport: [1.82, 1.86, 1.9, 1.94, 2.0, 2.05, 2.1, 2.14, 2.17, 2.2, 2.22, 2.24]
+                      primaryMeasureId: "52230-level-stage-i-15_min-m"
                       primaryAnalysis:
                         level: 2.24
                         slope_per_hour: 0.018
