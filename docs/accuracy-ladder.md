@@ -36,6 +36,8 @@ Use this when adding a place or storm:
 - [ ] Summer / `bounds_mode: none` returns `available: false`
 - [ ] Flood Watch History mounts Event volume panel; Live/Transport do not
 - [ ] Panel shows Low confidence / gauge-rise or percentile method (no mock fill)
+- [ ] History compare table lists Chandra / Dennis / 2014 / Ciara volume metrics
+- [ ] Map draws A361 depth strip from `road.samples` (lng/lat/depthM) in History
 
 ## What we do not do
 

@@ -361,10 +361,10 @@ def road_depth_summary(
             "label": road.get("label"),
         }
 
+    to_wgs = Transformer.from_crs("EPSG:27700", "EPSG:4326", always_xy=True)
     depths = [max(0.0, water_surface_m - s["terrainM"]) for s in samples]
     wet = [d for d in depths if d > 0]
     length_total = float(samples[-1]["chainageM"]) if samples else 0.0
-    # Approximate wet length: count wet samples × step
     wet_count = sum(1 for d in depths if d > 0)
     length_wet = wet_count * step_m
 
@@ -376,9 +376,14 @@ def road_depth_summary(
 
     strip = []
     for s, d in zip(samples, depths):
+        lon, lat = to_wgs.transform(float(s["easting"]), float(s["northing"]))
         strip.append(
             {
                 "chainageM": s["chainageM"],
+                "lng": round(float(lon), 6),
+                "lat": round(float(lat), 6),
+                "easting": s["easting"],
+                "northing": s["northing"],
                 "terrainM": s["terrainM"],
                 "depthM": round(d, 3),
             }

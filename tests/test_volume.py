@@ -233,6 +233,46 @@ class VolumeIntegrationTests(unittest.TestCase):
             self.assertIn("gauge", doc["method"])
             self.assertGreater(doc["method"]["gauge"]["riseM"], 0)
 
+    def test_road_samples_include_wgs84(self):
+        from api.services.volume import road_depth_summary
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Tile covering A361 Othery approach samples (~E336–340k / N131k)
+            place_dir = os.path.join(tmp, "a361-muchelney", "dtm-2m")
+            os.makedirs(place_dir)
+            path = os.path.join(place_dir, "dtm2m_E335000-341000_N130000-133000.tif")
+            transform = from_origin(335000.0, 133000.0, 20.0, 20.0)
+            h, w = 150, 300
+            data = np.full((h, w), 4.0, dtype=np.float32)
+            with rasterio.open(
+                path,
+                "w",
+                driver="GTiff",
+                height=h,
+                width=w,
+                count=1,
+                dtype="float32",
+                crs="EPSG:27700",
+                transform=transform,
+                nodata=-9999.0,
+            ) as dst:
+                dst.write(data, 1)
+            road = road_depth_summary(
+                "a361-muchelney",
+                water_surface_m=5.5,
+                tiles=[path],
+                step_m=100.0,
+            )
+            self.assertIsNotNone(road)
+            assert road is not None
+            self.assertTrue(road["available"], road)
+            sample = road["samples"][0]
+            self.assertIn("lng", sample)
+            self.assertIn("lat", sample)
+            self.assertIn("depthM", sample)
+            self.assertTrue(-3.0 < sample["lng"] < -2.5)
+            self.assertTrue(51.0 < sample["lat"] < 51.2)
+
 
 if __name__ == "__main__":
     unittest.main()
