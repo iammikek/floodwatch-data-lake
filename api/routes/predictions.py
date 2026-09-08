@@ -95,3 +95,32 @@ def get_storm_by_id(storm_id: str) -> Dict[str, Any]:
             detail={"detail": f"Unknown storm '{storm_id}'", "code": "storm_not_found"},
         )
     return storm
+
+
+@router.get("/v1/storms/{storm_id}/volume")
+def get_storm_volume(
+    storm_id: str,
+    place: Optional[str] = Query(
+        None, description="Place id for DTM path (defaults to storm corridor)"
+    ),
+    resolution: str = Query("2m", description="DTM resolution folder, e.g. 2m"),
+) -> Dict[str, Any]:
+    """Bathtub volume estimate: curated impact outline × LiDAR DTM (History analytic)."""
+    from api.services.volume import estimate_storm_volume
+
+    if not get_storm(storm_id):
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": f"Unknown storm '{storm_id}'", "code": "storm_not_found"},
+        )
+    try:
+        return estimate_storm_volume(
+            storm_id, place_id=place, resolution=resolution
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"detail": str(exc), "code": "volume_invalid"},
+        ) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

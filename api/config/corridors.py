@@ -56,6 +56,20 @@ CORRIDORS: Dict[str, Dict[str, Any]] = {
                 "kind": "road_segment",
             },
         ],
+        # Preferred stage for History bathtub free-surface / rise.
+        # Great Bow (m) tracks flood rise; Gaw mASD barely moves flood vs summer.
+        "volume_stage": {
+            "measure_id": "52230-level-stage-i-15_min-m",
+            "label": "Langport Great Bow",
+            "unit": "m",
+            "role": "levels_free_surface_proxy",
+            "baseline_window": {"from": "2018-08-01", "to": "2018-08-31"},
+            "dem_floor_percentile": 15.0,
+            "notes": (
+                "Peak stage minus late-summer baseline ≈ free-surface rise; "
+                "applied above DEM floor inside the curated outline."
+            ),
+        },
     }
 }
 

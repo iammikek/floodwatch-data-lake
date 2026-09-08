@@ -106,6 +106,29 @@ _STORMS_RAW: List[Dict[str, Any]] = [
         "notes": "More recent archive check for place history coverage.",
     },
     {
+        "id": "place-2026-01-chandra-levels",
+        "label": "Jan–Feb 2026 Levels flood (Storm Chandra)",
+        "corridor": "a361-muchelney",
+        "place_label": "Muchelney / A361 corridor",
+        "as_of": "2026-02-09T12:00:00Z",
+        "window": {"from": "2026-01-20", "to": "2026-02-22"},
+        "expected_verdict": "at_risk",
+        "kind": "major_flood",
+        "severity": "high",
+        "impact_summary": (
+            "Founding place event: A361 East Lyng–Burrowbridge and Muchelney approaches "
+            "impassable; major incident 27 Jan–18 Feb after Storm Chandra on saturated Levels."
+        ),
+        "bounds_mode": "impact",
+        "notes": (
+            "Product impetus event. Met Office named Storm Chandra (UK impact 26–27 Jan 2026) "
+            "inside a longer wet spell; Somerset Council closed the A361 from ~25 Jan with "
+            "reopen/reclose mid-February. as_of is Great Bow peak (~9 Feb), not Chandra day. "
+            "Gaw Bridge live series for 2026 is on a different scale than the hydrology archive — "
+            "prefer Great Bow for stage/volume until that is reconciled."
+        ),
+    },
+    {
         "id": "eval-stable-summer",
         "label": "Aug 2018 stable summer",
         "corridor": "a361-muchelney",

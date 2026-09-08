@@ -8,6 +8,7 @@ pipelines:
           - pip
         script:
           - python -V
+          - apt-get update && apt-get install -y --no-install-recommends gdal-bin libgdal-dev g++
           - pip install -r requirements.txt
           - mkdir -p test-reports
           - python -m xmlrunner discover -s tests -v -o test-reports
@@ -21,6 +22,7 @@ pipelines:
             - pip
           script:
             - python -V
+            - apt-get update && apt-get install -y --no-install-recommends gdal-bin libgdal-dev g++
             - pip install -r requirements.txt
             - mkdir -p test-reports
             - python -m xmlrunner discover -s tests -v -o test-reports
