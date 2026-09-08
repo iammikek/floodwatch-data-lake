@@ -89,6 +89,21 @@ _EXTENT_RINGS: Dict[str, List[List[float]]] = {
         [-2.865, 51.12],
         [-2.86, 51.11],
     ],
+    # Jan–Feb 2026 Levels flood (Storm Chandra) — A361 East Lyng–Burrowbridge + Muchelney.
+    # Wide footprint; distinct from 2014 / Dennis rings. Hand-curated v0, not surveyed.
+    "place-2026-01-chandra-levels": [
+        [-2.96, 51.055],
+        [-2.91, 51.04],
+        [-2.82, 51.045],
+        [-2.74, 51.07],
+        [-2.70, 51.11],
+        [-2.71, 51.16],
+        [-2.78, 51.19],
+        [-2.88, 51.185],
+        [-2.95, 51.15],
+        [-2.97, 51.10],
+        [-2.96, 51.055],
+    ],
 }
 
 

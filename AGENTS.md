@@ -15,6 +15,9 @@ Notes
 - Date params: flood-monitoring uses YYYY-MM-DD (startdate/enddate); hydrology uses mineq-date/maxeq-date
 - Empty gzip month files are treated as missing on resume (do not count as coverage)
 - Storm catalogue: `GET /v1/storms`; hindcast predictions: `GET /v1/predictions?as_of=...`
+- Founding place event: `place-2026-01-chandra-levels` (Jan–Feb 2026 Levels / Storm Chandra; A361 impassable)
+- Storm volume (History): `GET /v1/storms/{id}/volume` — gauge-rise bathtub + A361 road strip; docs: `docs/place-lidar-volume.md`, `docs/accuracy-ladder.md`
+- LiDAR DTM ingest: `python -m ingestion.cli ingest-lidar-dtm --place a361-muchelney --resolution 2m --extent core --resume`
 
 How to Start Collector
 - Prereqs: Docker Desktop installed; running on macOS (Apple Silicon supported).

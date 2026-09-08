@@ -4,9 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# System deps kept minimal for JSON/APIs; heavier libs (GDAL/NetCDF) can be added later
+# ca-certificates/curl for HTTP; GDAL headers for rasterio (LiDAR DTM volume)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git && \
+    ca-certificates curl git \
+    gdal-bin libgdal-dev g++ && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

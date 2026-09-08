@@ -50,6 +50,25 @@ class StormExtentsTests(unittest.TestCase):
         assert storm is not None
         self.assertEqual(storm["impact_geometry"]["features"][0]["properties"]["kind"], "curated_impact_v0")
 
+    def test_chandra_2026_founding_event_in_catalogue(self):
+        storm = get_storm("place-2026-01-chandra-levels")
+        self.assertIsNotNone(storm)
+        assert storm is not None
+        self.assertEqual(storm["kind"], "major_flood")
+        self.assertEqual(storm["severity"], "high")
+        self.assertEqual(storm["as_of"], "2026-02-09T12:00:00Z")
+        self.assertEqual(storm["window"]["from"], "2026-01-20")
+        self.assertEqual(storm["window"]["to"], "2026-02-22")
+        self.assertIn("A361", storm["impact_summary"])
+        self.assertIsNotNone(storm.get("impact_geometry"))
+        self.assertNotEqual(
+            impact_bbox_for("place-2026-01-chandra-levels"),
+            impact_bbox_for("eval-2020-02"),
+        )
+        # Newest as_of should sort first for the corridor list.
+        newest = list_storms("a361-muchelney")[0]
+        self.assertEqual(newest["id"], "place-2026-01-chandra-levels")
+
 
 if __name__ == "__main__":
     unittest.main()
