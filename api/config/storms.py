@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from api.config.storm_extents import impact_bbox_for, impact_collection
+from api.config.storm_warnings import warning_evidence_for
 
 _STORMS_RAW: List[Dict[str, Any]] = [
     {
@@ -147,13 +148,19 @@ _STORMS_RAW: List[Dict[str, Any]] = [
 
 def _enrich_storm(raw: Dict[str, Any]) -> Dict[str, Any]:
     storm = dict(raw)
+    storm_id = str(storm["id"])
+    evidence = warning_evidence_for(storm_id)
+    if evidence:
+        storm["warning_evidence"] = evidence
+    else:
+        storm["warning_evidence"] = None
+
     mode = str(storm.get("bounds_mode") or "").lower()
     if mode == "none":
         storm["impact_bbox"] = None
         storm["impact_geometry"] = None
         return storm
 
-    storm_id = str(storm["id"])
     geom = impact_collection(storm_id, storm_label=str(storm.get("label") or ""))
     bbox = impact_bbox_for(storm_id)
     storm["impact_geometry"] = geom

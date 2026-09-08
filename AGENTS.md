@@ -17,6 +17,7 @@ Notes
 - Storm catalogue: `GET /v1/storms`; hindcast predictions: `GET /v1/predictions?as_of=...`
 - Founding place event: `place-2026-01-chandra-levels` (Jan–Feb 2026 Levels / Storm Chandra; A361 impassable)
 - Storm volume (History): `GET /v1/storms/{id}/volume` — gauge-rise bathtub + A361 road strip; docs: `docs/place-lidar-volume.md`, `docs/accuracy-ladder.md`
+- Historic warnings (History): `GET /v1/storms/{id}/warnings` — curated AfA435 issue rows; config: `api/config/storm_warnings.py`
 - LiDAR DTM ingest: `python -m ingestion.cli ingest-lidar-dtm --place a361-muchelney --resolution 2m --extent core --resume`
 
 How to Start Collector

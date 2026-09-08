@@ -9,6 +9,7 @@ Place accuracy work serves **historical analysis**, not the live monitor.
 | 3. LiDAR DTM ingest | ✅ | WCS Composite DTM 2 m tiles under `data/curated/lidar/{place}/dtm-2m/` |
 | 4. Volume v0 | ✅ | Outline × DEM bathtub; History panel |
 | 4b. Gauge-linked rise + A361 strip | ✅ | Great Bow peak−summer rise; road centreline depths |
+| 4c. Historic flood warnings (AfA435) | ✅ | Curated issue rows on Chandra; `GET /v1/storms/{id}/warnings` |
 | 5. HiPIMS / depth-over-road | Deferred | After extents + DEM prove useful |
 
 ## Extents → DEM → volume checklist
@@ -38,6 +39,14 @@ Use this when adding a place or storm:
 - [ ] Panel shows Low confidence / gauge-rise or percentile method (no mock fill)
 - [ ] History compare table lists Chandra / Dennis / 2014 / Ciara volume metrics
 - [ ] Map draws A361 depth strip from `road.samples` (lng/lat/depthM) in History
+
+### Historic warnings (AfA435)
+
+- [ ] Corridor issue rows curated in `api/config/storm_warnings.py` for founding events
+- [ ] Storm enrichment attaches `warning_evidence` (`floodwatch.storm_warning_evidence.v0`)
+- [ ] `GET /v1/storms/{id}/warnings` returns items + counts (or `available: false`)
+- [ ] Notes call out issue-date semantics and known archive gaps (e.g. 112FWFEAS10A in 2026)
+- [ ] Flood Watch History mounts Historic flood warnings panel (not live warnings layer)
 
 ## What we do not do
 
