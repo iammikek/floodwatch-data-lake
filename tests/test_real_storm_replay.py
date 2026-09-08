@@ -49,12 +49,12 @@ class RealStormReplayTests(unittest.TestCase):
             "likely_impassable",
             "no_data",
         })
-        # Soft assertion: once Gaw Bridge archive exists, expect non-no_data.
+        # Soft assertion: once Great Bow (primary) archive exists, expect non-no_data.
         primary_months = next(
             (
                 m["present_months"]
                 for m in report["measures"]
-                if m["measure_id"] == "52119-level-stage-i-15_min-mASD"
+                if m["measure_id"] == "52230-level-stage-i-15_min-m"
             ),
             0,
         )

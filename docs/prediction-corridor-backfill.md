@@ -10,10 +10,10 @@ Backfill mined EA stage history for the **A361 Muchelney** prediction corridor �
 
 | measure_id | Gauge |
 |------------|-------|
-| `52119-level-stage-i-15_min-mASD` | Gaw Bridge · River Parrett (primary) |
-| `52153-level-stage-i-15_min-mASD` | Midelney · River Isle |
+| `52230-level-stage-i-15_min-m` | Langport Great Bow (**hindcast primary** + volume stage) |
 | `52245-level-stage-i-15_min-m` | Westonzoyland PS |
-| `52230-level-stage-i-15_min-m` | Langport Great Bow |
+| `52119-level-stage-i-15_min-mASD` | Gaw Bridge · River Parrett (observables only; excluded from analogues) |
+| `52153-level-stage-i-15_min-mASD` | Midelney · River Isle (optional) |
 
 Registry: `api/config/corridors.py` (`a361-muchelney`).
 

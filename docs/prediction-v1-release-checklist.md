@@ -9,10 +9,10 @@
 ## Data readiness
 
 - [x] Required corridor measures backfilled ≥ 24 months across golden windows (target 60+)
-  - `52119-level-stage-i-15_min-mASD` (Gaw Bridge) — **hydrology proxy:** Thorney Mill (~3.1 km)
-  - `52153-level-stage-i-15_min-mASD` (Midelney) — **optional**; no long archive yet (Midelney Lock from Aug 2022 only); omitted from analogue fingerprints when empty
+  - `52230-level-stage-i-15_min-m` (Langport Great Bow) — **hindcast primary** + volume stage; **hydrology proxy:** Monks Leaze (~1 km)
   - `52245-level-stage-i-15_min-m` (Westonzoyland PS) — exact hydrology archive
-  - `52230-level-stage-i-15_min-m` (Langport Great Bow) — **hydrology proxy:** Monks Leaze (~1 km)
+  - `52119-level-stage-i-15_min-mASD` (Gaw Bridge) — observables only / **exclude_from_analogue** (2026 FM scale ≠ Thorney Mill proxy); **hydrology proxy:** Thorney Mill (~3.1 km)
+  - `52153-level-stage-i-15_min-mASD` (Midelney) — **optional**; no long archive yet (Midelney Lock from Aug 2022 only); omitted from analogue fingerprints when empty
 - [x] Mapped / proxy gauges satisfy coverage for storm windows (Midelney excluded from hard gate while optional)
 - [x] Backfill window includes golden eval periods: Jan–Feb 2014, Feb 2020, Aug 2018
 - [x] Empty gzip placeholders are not counted as coverage (resume refetch)

@@ -483,11 +483,15 @@ def _analogue_measure_ids(
 
     Required gauges (optional=False) must have series. Optional gauges (e.g.
     Midelney without a long hydrology archive) are included only when present.
+    Gauges flagged exclude_from_analogue (e.g. Gaw Bridge scale break) are
+    never fingerprinted even when series exist.
     """
     primary_id = corridor["primary"]["measure_id"]
     active: List[str] = []
     for gauge in corridor["gauges"]:
         measure_id = gauge["measure_id"]
+        if gauge.get("exclude_from_analogue"):
+            continue
         has_series = bool(series_by_measure.get(measure_id))
         if has_series:
             active.append(measure_id)
@@ -618,7 +622,14 @@ def predict_corridor(
     ]
 
     gauge_series_out: Dict[str, List[float]] = {}
-    key_gauge_id = corridor["gauges"][0]["ref"]
+    key_gauge_id = next(
+        (
+            g["ref"]
+            for g in corridor["gauges"]
+            if g["measure_id"] == primary["measure_id"]
+        ),
+        corridor["gauges"][0]["ref"],
+    )
 
     for g in corridor["gauges"]:
         mid = g["measure_id"]
@@ -697,7 +708,9 @@ def predict_corridor(
             },
             "notes": (
                 "Matches current multi-gauge shape to past EA windows. "
-                "Optional corridor gauges without archive are omitted from fingerprints. "
+                "Primary stage is Langport Great Bow. Optional / "
+                "exclude_from_analogue gauges (e.g. Gaw Bridge scale break) "
+                "are omitted from fingerprints. "
                 "Not a rainfall-lag or depth model; confidence reflects analogue agreement."
             ),
         },
