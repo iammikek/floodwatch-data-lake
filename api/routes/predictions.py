@@ -124,3 +124,32 @@ def get_storm_volume(
         ) from exc
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/v1/storms/{storm_id}/warnings")
+def get_storm_warnings(storm_id: str) -> Dict[str, Any]:
+    """Curated AfA435 historic warning evidence for a storm (History analytic)."""
+    from api.config.storm_warnings import warning_evidence_for
+
+    storm = get_storm(storm_id)
+    if not storm:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": f"Unknown storm '{storm_id}'", "code": "storm_not_found"},
+        )
+    evidence = storm.get("warning_evidence") or warning_evidence_for(storm_id)
+    if not evidence:
+        return {
+            "schema": "floodwatch.storm_warning_evidence.v0",
+            "stormId": storm_id,
+            "available": False,
+            "reason": "no_warning_evidence",
+            "items": [],
+            "counts": {
+                "total": 0,
+                "floodWarning": 0,
+                "floodAlert": 0,
+                "severeFloodWarning": 0,
+            },
+        }
+    return {**evidence, "available": True, "reason": None}
