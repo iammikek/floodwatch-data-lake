@@ -59,12 +59,12 @@ Attribution: © Environment Agency copyright and/or database right 2022. LIDAR C
 2. Load corridor `volume_stage` (Langport Great Bow) peak over the storm window and median over the late-summer baseline window.
 3. Rise = `max(0, peak − baseline)`; DEM floor = percentile inside the outline (default 15th).
 4. Water surface = DEM floor + rise; depth = `max(0, surface − terrain)`.
-5. Sample curated A361 centreline (`api/config/road_lines.py`) every 20 m → max/mean depth and length above 0.3 / 0.5 / 1.0 m.
+5. Sample curated A361 centreline (`api/config/road_lines.py`) every 20 m → max/mean depth and length above 0.3 / 0.5 / 1.0 m. Each sample includes WGS84 `lng`/`lat` for History map colouring.
 6. If gauge series is missing, fall back to DEM-percentile bathtub (`bathtub_fill_percentile_v0`).
 
 **Why Great Bow, not Gaw:** Gaw Bridge mASD barely moves flood vs summer in the archive; Great Bow (m) tracks Levels free-surface rise.
 
-**UI:** History panel shows volume stats + A361 depth strip (not Live/Transport).
+**UI:** History panel shows volume stats + A361 depth strip on the map (coloured by depth) and a cross-storm compare table (Chandra, Dennis, 2014, Ciara).
 
 **Laravel proxy:** `GET /flood-watch/storms/{stormId}/volume`
 
