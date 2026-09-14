@@ -33,6 +33,14 @@ _A361_FULL_BNG = {
     "north": 150000.0,
 }
 
+# A361 East Lyng / Othery depth-strip + HiPIMS corridor pilot (~7 × 5 km).
+_A361_HOTSPOT_BNG = {
+    "west": 335000.0,
+    "south": 130000.0,
+    "east": 342000.0,
+    "north": 135000.0,
+}
+
 PLACE_BBOXES: Dict[str, Dict[str, Any]] = {
     "a361-muchelney": {
         "id": "a361-muchelney",
@@ -42,8 +50,10 @@ PLACE_BBOXES: Dict[str, Dict[str, Any]] = {
         "wgs84": dict(_A361_WGS84),
         "bng_core": dict(_A361_CORE_BNG),
         "bng_full": dict(_A361_FULL_BNG),
+        "bng_hotspot": dict(_A361_HOTSPOT_BNG),
         "notes": (
-            "bng_core is the default LiDAR ingest window for volume v0; "
+            "bng_core is the default LiDAR ingest window for volume; "
+            "bng_hotspot is the A361 strip for 1 m / HiPIMS prep; "
             "bng_full covers curated storm impact envelopes."
         ),
     }
@@ -62,7 +72,13 @@ def bng_bbox(
     place_id: str, *, extent: str = "core"
 ) -> Tuple[float, float, float, float]:
     place = get_place_bbox(place_id)
-    key = "bng_full" if extent == "full" else "bng_core"
+    key = {
+        "full": "bng_full",
+        "hotspot": "bng_hotspot",
+        "core": "bng_core",
+    }.get(extent, "bng_core")
+    if key not in place:
+        raise KeyError(f"place '{place_id}' has no {key} bbox")
     box = place[key]
     return (
         float(box["west"]),

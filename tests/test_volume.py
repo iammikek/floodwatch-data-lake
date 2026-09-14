@@ -13,6 +13,7 @@ from api.services.volume import (
     bathtub_from_elevations,
     densify_bng_line,
     estimate_storm_volume,
+    resolve_dtm_resolution,
     resolve_gauge_rise_surface,
 )
 from api.utils.cache import clear_rate_limit
@@ -118,6 +119,64 @@ class VolumeIntegrationTests(unittest.TestCase):
         doc = estimate_storm_volume("eval-stable-summer")
         self.assertFalse(doc["available"])
         self.assertEqual(doc["reason"], "no_impact_geometry")
+
+    def test_resolve_dtm_resolution_prefers_1m(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # Core-sized 1m set (≥6 tiles) should win over 2m.
+            d1 = os.path.join(tmp, "a361-muchelney", "dtm-1m")
+            d2 = os.path.join(tmp, "a361-muchelney", "dtm-2m")
+            os.makedirs(d1)
+            os.makedirs(d2)
+            for i in range(6):
+                with open(os.path.join(d1, f"tile-1m-{i}.tif"), "wb") as fh:
+                    fh.write(b"II*\x00fake")
+            with open(os.path.join(d2, "tile-2m.tif"), "wb") as fh:
+                fh.write(b"II*\x00fake")
+            self.assertEqual(
+                resolve_dtm_resolution("a361-muchelney", "auto", dtm_root=tmp),
+                "1m",
+            )
+            self.assertEqual(
+                resolve_dtm_resolution("a361-muchelney", "2m", dtm_root=tmp),
+                "2m",
+            )
+
+    def test_resolve_dtm_resolution_keeps_2m_when_1m_is_hotspot_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d1 = os.path.join(tmp, "a361-muchelney", "dtm-1m")
+            d2 = os.path.join(tmp, "a361-muchelney", "dtm-2m")
+            os.makedirs(d1)
+            os.makedirs(d2)
+            for i in range(2):
+                with open(os.path.join(d1, f"tile-1m-{i}.tif"), "wb") as fh:
+                    fh.write(b"II*\x00fake")
+            with open(os.path.join(d2, "tile-2m.tif"), "wb") as fh:
+                fh.write(b"II*\x00fake")
+            self.assertEqual(
+                resolve_dtm_resolution("a361-muchelney", "auto", dtm_root=tmp),
+                "2m",
+            )
+
+    def test_resolve_dtm_resolution_falls_back_to_2m(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = os.path.join(tmp, "a361-muchelney", "dtm-2m")
+            os.makedirs(d)
+            with open(os.path.join(d, "tile-2m.tif"), "wb") as fh:
+                fh.write(b"II*\x00fake")
+            self.assertEqual(
+                resolve_dtm_resolution("a361-muchelney", "auto", dtm_root=tmp),
+                "2m",
+            )
+
+    def test_api_place_dem_status(self):
+        r = self.client.get("/v1/places/a361-muchelney/dem")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["schema"], "floodwatch.place_dem.v0")
+        self.assertIn(body["preferredResolution"], ("1m", "2m"))
+        self.assertIn("1m", body["resolutions"])
+        self.assertEqual(body["hipims"]["status"], "dem_prep")
+        self.assertFalse(body["hipims"]["solver"]["wired"])
 
     def test_api_unknown_storm_404(self):
         r = self.client.get("/v1/storms/no-such-storm/volume")

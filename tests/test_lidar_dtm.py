@@ -13,9 +13,13 @@ class PlaceBboxTests(unittest.TestCase):
         self.assertLess(s, n)
         cw, cs, ce, cn = bng_bbox("a361-muchelney", extent="core")
         fw, fs, fe, fn = bng_bbox("a361-muchelney", extent="full")
+        hw, hs, he, hn = bng_bbox("a361-muchelney", extent="hotspot")
         self.assertLess(cw, ce)
         self.assertLessEqual(fw, cw)
         self.assertGreaterEqual(fe, ce)
+        self.assertGreaterEqual(hw, cw)
+        self.assertLessEqual(he, ce)
+        self.assertLess(hs, hn)
 
 
 class LidarDtmHelpersTests(unittest.TestCase):
