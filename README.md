@@ -17,6 +17,31 @@ Data ingestion and API for UK flood monitoring, curated polygons, and time‑ser
   - Discovery outputs: data/raw/ea/stations/*.ndjson.gz; data/raw/ea/measures/*.ndjson.gz
   - Curated polygons: data/curated/ea/*.geojson
 
+## Why Python (not Laravel)?
+
+Flood Watch (Laravel) already proxies this lake. Folding the lake into Laravel would mostly be an **ops / coupling** change, not a free performance win. Runtime language is rarely the bottleneck.
+
+**Where Laravel would be similar or fine**
+
+- Thin JSON proxies (warnings, storm catalogue, health): PHP-FPM vs Uvicorn is noise next to network and file I/O.
+- Reading gzipped NDJSON month files and returning aggregates: I/O-bound either way; PHP streams fine.
+- Caching and rate limits: Redis (or APCu) in Laravel can match the current in-process Python caches if done properly.
+
+**Where Laravel would likely be worse**
+
+- **LiDAR volume / road strip** (`rasterio` + NumPy over large GeoTIFFs): clearest regression. PHP has no first-class equivalent — you would shell out to GDAL/Python, call a sidecar, or precompute. A “Laravel lake” still needs a numeric worker.
+- **Hindcast analogue matching**: CPU over many gauge hours. Python is merely adequate today; PHP can do it, but without NumPy-style arrays you fight GC/memory on long series unless results are pre-indexed in Postgres.
+- **Ingestion / backfill workers**: Laravel queues are solid, but EA hydrology and WCS clients would be rewritten, and long-lived workers must stay isolated from the Livewire/LLM web pool. Sharing that pool is the real risk.
+
+**Where performance actually comes from (either stack)**
+
+- Precompute analogues / volume and store results
+- Postgres (+ PostGIS) instead of scanning NDJSON on every request
+- Separate worker pool from the user-facing app
+- Keep HiPIMS / DEM work out of request threads
+
+**Bottom line:** merging into Laravel might simplify deploy/auth, but History volume and prediction would still need a Python (or GDAL) sidecar — or accept slower numeric paths. The lake stays separate so backfills and heavy analytics do not contend with Flood Watch; that isolation matters more than Python vs PHP. See also [docs/architecture-plan.md](docs/architecture-plan.md).
+
 ## Prerequisites
 - Docker Desktop installed (macOS, Apple Silicon supported)
 
