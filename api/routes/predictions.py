@@ -195,4 +195,9 @@ def get_storm_warnings(storm_id: str) -> Dict[str, Any]:
                 "severeFloodWarning": 0,
             },
         }
-    return {**evidence, "available": True, "reason": None}
+    has_items = bool(evidence.get("items"))
+    return {
+        **evidence,
+        "available": has_items,
+        "reason": None if has_items else "no_corridor_issues_in_window",
+    }

@@ -20,6 +20,11 @@ _SEVERITY_LEVEL = {
     "flood watch": 3,
 }
 
+_ATTRIBUTION = (
+    "© Environment Agency copyright and/or database right 2026. "
+    "Historic Flood Warnings."
+)
+
 
 def _level(type_label: str) -> int:
     return int(_SEVERITY_LEVEL.get(str(type_label or "").strip().lower(), 4))
@@ -44,27 +49,118 @@ def _item(
     }
 
 
-# Extracted from AfA435 ODS (202607 export) for corridor codes / Muchelney names.
-_STORM_WARNINGS: Dict[str, Dict[str, Any]] = {
-    "place-2026-01-chandra-levels": {
+def _doc(
+    storm_id: str,
+    *,
+    notes: str,
+    items: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
         "schema": "floodwatch.storm_warning_evidence.v0",
-        "stormId": "place-2026-01-chandra-levels",
+        "stormId": storm_id,
         "source": "ea:afa435-historic-flood-warnings",
         "dataset": "Historic Flood Warnings (AfA435)",
         "datasetExport": "202607",
-        "attribution": (
-            "© Environment Agency copyright and/or database right 2026. "
-            "Historic Flood Warnings."
-        ),
+        "attribution": _ATTRIBUTION,
         "method": "hand_filtered_afa435_issue_rows",
-        "notes": (
+        "notes": notes,
+        "items": items,
+    }
+
+
+# Extracted from AfA435 ODS (202607 export) for corridor codes / Muchelney names.
+_STORM_WARNINGS: Dict[str, Dict[str, Any]] = {
+    "eval-2014-01": _doc(
+        "eval-2014-01",
+        notes=(
+            "AfA435 issue dates only. Corridor filter for Jan–Feb 2014 Levels. "
+            "Includes the 5 Feb 2014 Severe Flood Warning on A361 East Lyng to "
+            "Burrowbridge (112FWFEAS10A). Thorney code 112FWF3C0B is the 2014 "
+            "predecessor of today's 112FWFPAR20A."
+        ),
+        items=[
+            _item(
+                flood_area_id="112FWF3C0B",
+                title="River Parrett (upper) at Thorney and Kingsbury Episcopi",
+                type_label="Flood warning",
+                issued_on="2014-01-01",
+                area="SW - North Wessex",
+            ),
+            _item(
+                flood_area_id="112FWF3C0B",
+                title="River Parrett (upper) at Thorney and Kingsbury Episcopi",
+                type_label="Flood warning",
+                issued_on="2014-01-04",
+                area="SW - North Wessex",
+            ),
+            _item(
+                flood_area_id="112FWFEAS10A",
+                title="A361 East Lyng to Burrowbridge",
+                type_label="Severe flood warning",
+                issued_on="2014-02-05",
+                area="SW - North Wessex",
+            ),
+        ],
+    ),
+    "place-2020-02-ciara": _doc(
+        "place-2020-02-ciara",
+        notes=(
+            "AfA435 has no Muchelney / Parrett–Tone corridor issue rows in the "
+            "Ciara weekend window (7–11 Feb 2020). Corridor Flood Alerts for "
+            "Muchelney / Lower Tone–Parrett Moors begin 13 Feb — curated under "
+            "Storm Dennis (eval-2020-02). Treated as an archive timing gap for "
+            "this short named-storm window, not absence of later Levels impact."
+        ),
+        items=[],
+    ),
+    "eval-2020-02": _doc(
+        "eval-2020-02",
+        notes=(
+            "AfA435 issue dates only. Corridor filter for Storm Dennis "
+            "(13–20 Feb 2020). Muchelney / Lower Tone–Parrett Moors alerts on "
+            "13 Feb; Curry Moor / Hay Moor Flood Warning on 16 Feb."
+        ),
+        items=[
+            _item(
+                flood_area_id="112WAFYPM",
+                title="River Yeo and River Parrett Moors around Muchelney and Thorney",
+                type_label="Flood alert",
+                issued_on="2020-02-13",
+                area="Wessex - North",
+            ),
+            _item(
+                flood_area_id="112WAFTPM",
+                title="Lower Tone and Parrett Moors",
+                type_label="Flood alert",
+                issued_on="2020-02-13",
+                area="Wessex - North",
+            ),
+            _item(
+                flood_area_id="112FWFPAR10A",
+                title="River Parrett (upper) from South Perrott to Thorney",
+                type_label="Flood warning",
+                issued_on="2020-02-15",
+                area="Wessex - North",
+            ),
+            _item(
+                flood_area_id="112FWFCUR10A",
+                title="Curry Moor and Hay Moor",
+                type_label="Flood warning",
+                issued_on="2020-02-16",
+                area="Wessex - North",
+            ),
+        ],
+    ),
+    "place-2026-01-chandra-levels": _doc(
+        "place-2026-01-chandra-levels",
+        notes=(
             "AfA435 records warning issue dates, not the full period a warning stayed "
             "in force. Corridor filter: Muchelney / Parrett–Tone Levels flood areas. "
             "A361 East Lyng to Burrowbridge (112FWFEAS10A) has no 2026 issue row in "
             "AfA435 (last issue 2024-01-05) even though EA briefing 27 Feb 2026 reported "
             "removing that Flood Warning — treated as an archive gap, not absence of impact."
         ),
-        "items": [
+        items=[
             _item(
                 flood_area_id="112WAFYPM",
                 title="River Yeo and River Parrett Moors around Muchelney and Thorney",
@@ -117,7 +213,7 @@ _STORM_WARNINGS: Dict[str, Dict[str, Any]] = {
                 area="Wessex",
             ),
         ],
-    }
+    ),
 }
 
 

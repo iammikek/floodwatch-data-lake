@@ -43,7 +43,7 @@ Use this when adding a place or storm:
 
 ### Historic warnings (AfA435)
 
-- [ ] Corridor issue rows curated in `api/config/storm_warnings.py` for founding events
+- [ ] Corridor issue rows curated in `api/config/storm_warnings.py` for founding events (Chandra, Dennis, 2014; Ciara noted empty)
 - [ ] Storm enrichment attaches `warning_evidence` (`floodwatch.storm_warning_evidence.v0`)
 - [ ] `GET /v1/storms/{id}/warnings` returns items + counts (or `available: false`)
 - [ ] Notes call out issue-date semantics and known archive gaps (e.g. 112FWFEAS10A in 2026)
