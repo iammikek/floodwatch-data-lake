@@ -7,6 +7,10 @@ bounds_mode:
   - "impact" — curated floodplain polygon (impact_geometry) + bbox envelope
   - "none" — no flood-bound overlay (e.g. summer control)
 
+volume_compare:
+  - true — included in History Event volume · compare (lake-owned membership)
+  - volume_compare_rank — display order (ascending; Chandra = 1)
+
 impact_geometry is a GeoJSON FeatureCollection (hand-curated v0).
 impact_bbox remains the envelope for clients that only clip by bbox.
 """
@@ -31,6 +35,8 @@ _STORMS_RAW: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Muchelney cut off for weeks; A361 approaches flooded.",
         "bounds_mode": "impact",
+        "volume_compare": True,
+        "volume_compare_rank": 3,
         "notes": (
             "Somerset Levels winter flooding; Muchelney isolation peaked mid-February. "
             "as_of is the mid-event evaluation instant (not early January onset)."
@@ -76,6 +82,8 @@ _STORMS_RAW: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Named storm; Parrett corridor under pressure before Dennis.",
         "bounds_mode": "impact",
+        "volume_compare": True,
+        "volume_compare_rank": 4,
         "notes": "Storm Ciara weekend; Dennis followed a week later.",
     },
     {
@@ -90,6 +98,8 @@ _STORMS_RAW: List[Dict[str, Any]] = [
         "severity": "high",
         "impact_summary": "Named-storm peak; corridor hindcast golden eval.",
         "bounds_mode": "impact",
+        "volume_compare": True,
+        "volume_compare_rank": 2,
         "notes": "Named storm window used for golden analogue eval.",
     },
     {
@@ -121,6 +131,8 @@ _STORMS_RAW: List[Dict[str, Any]] = [
             "impassable; major incident 27 Jan–18 Feb after Storm Chandra on saturated Levels."
         ),
         "bounds_mode": "impact",
+        "volume_compare": True,
+        "volume_compare_rank": 1,
         "notes": (
             "Product impetus event. Met Office named Storm Chandra (UK impact 26–27 Jan 2026) "
             "inside a longer wet spell; Somerset Council closed the A361 from ~25 Jan with "
@@ -149,6 +161,13 @@ _STORMS_RAW: List[Dict[str, Any]] = [
 def _enrich_storm(raw: Dict[str, Any]) -> Dict[str, Any]:
     storm = dict(raw)
     storm_id = str(storm["id"])
+    storm["volume_compare"] = bool(storm.get("volume_compare"))
+    if storm["volume_compare"]:
+        rank = storm.get("volume_compare_rank")
+        storm["volume_compare_rank"] = int(rank) if rank is not None else 99
+    else:
+        storm.pop("volume_compare_rank", None)
+
     evidence = warning_evidence_for(storm_id)
     if evidence:
         storm["warning_evidence"] = evidence
@@ -174,6 +193,22 @@ STORMS: List[Dict[str, Any]] = [_enrich_storm(row) for row in _STORMS_RAW]
 def list_storms(corridor: Optional[str] = None) -> List[Dict[str, Any]]:
     rows = list(STORMS) if not corridor else [s for s in STORMS if s.get("corridor") == corridor]
     return sorted(rows, key=lambda s: s.get("as_of") or "", reverse=True)
+
+
+def list_volume_compare_storms(corridor: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Golden History volume-compare set — lake-owned membership and order."""
+    rows = [
+        s
+        for s in list_storms(corridor)
+        if s.get("volume_compare")
+    ]
+    return sorted(
+        rows,
+        key=lambda s: (
+            int(s.get("volume_compare_rank") or 99),
+            str(s.get("as_of") or ""),
+        ),
+    )
 
 
 def get_storm(storm_id: str) -> Optional[Dict[str, Any]]:

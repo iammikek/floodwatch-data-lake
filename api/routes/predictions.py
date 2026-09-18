@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from api.config.corridors import list_corridor_ids
 from api.config.hipims import get_hipims_pilot, list_hipims_pilot_ids
 from api.config.place_bboxes import get_place_bbox, list_place_ids
-from api.config.storms import get_storm, list_storms
+from api.config.storms import get_storm, list_storms, list_volume_compare_storms
 from api.services.predictions import predict_corridor
 from api.services.volume import list_dtm_tiles, resolve_dtm_resolution
 
@@ -76,6 +76,10 @@ def get_prediction_corridors() -> Dict[str, Any]:
 @router.get("/v1/storms")
 def get_storms(
     corridor: Optional[str] = Query(None, description="Filter by corridor id"),
+    volume_compare: Optional[bool] = Query(
+        None,
+        description="When true, return only lake-curated History volume-compare storms (ordered)",
+    ),
 ) -> Dict[str, Any]:
     if corridor and corridor not in list_corridor_ids():
         raise HTTPException(
@@ -86,6 +90,8 @@ def get_storms(
                 "known": list_corridor_ids(),
             },
         )
+    if volume_compare is True:
+        return {"storms": list_volume_compare_storms(corridor)}
     return {"storms": list_storms(corridor)}
 
 
