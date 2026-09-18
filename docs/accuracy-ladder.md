@@ -48,6 +48,7 @@ Use this when adding a place or storm:
 - [ ] `GET /v1/storms/{id}/warnings` returns items + counts (or `available: false`)
 - [ ] Notes call out issue-date semantics and known archive gaps (e.g. 112FWFEAS10A in 2026)
 - [ ] Flood Watch History mounts Historic flood warnings panel (not live warnings layer)
+- [ ] History map plots AfA435 severity markers; 112FWFEAS10A accents the A361 strip
 
 ### Finer DEM / HiPIMS prep
 
