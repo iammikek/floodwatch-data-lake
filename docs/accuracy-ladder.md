@@ -39,6 +39,7 @@ Use this when adding a place or storm:
 - [ ] Flood Watch History mounts Event volume panel; Live/Transport do not
 - [ ] Panel shows Low confidence / gauge-rise or percentile method (no mock fill)
 - [ ] History compare table lists Chandra / Dennis / 2014 / Ciara volume metrics
+- [ ] Compare membership is lake-owned (`volume_compare` on storms / `?volume_compare=true`)
 - [ ] Map draws A361 depth strip from `road.samples` (lng/lat/depthM) in History
 
 ### Historic warnings (AfA435)
