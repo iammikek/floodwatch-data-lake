@@ -9,7 +9,7 @@ Place accuracy work serves **historical analysis**, not the live monitor.
 | 3. LiDAR DTM ingest | ✅ | WCS Composite DTM 2 m tiles under `data/curated/lidar/{place}/dtm-2m/` |
 | 4. Volume v0 | ✅ | Outline × DEM bathtub; History panel |
 | 4b. Gauge-linked rise + A361 strip | ✅ | Great Bow peak−summer rise; road centreline depths |
-| 4c. Historic flood warnings (AfA435) | ✅ | Curated issue rows on Chandra; `GET /v1/storms/{id}/warnings` |
+| 4c. Historic flood warnings (AfA435) | ✅ | Chandra, Dennis, 2014; Ciara empty-window notes; `GET /v1/storms/{id}/warnings` |
 | 5a. Finer DEM (1 m hotspot) | ✅ | A361 hotspot ingest; volume `resolution=1m` / auto when core-sized |
 | 5b. HiPIMS / depth-over-road | Deferred | DEM contract in `docs/hipims-prep.md`; solver not wired |
 
